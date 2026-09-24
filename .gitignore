@@ -1,0 +1,10 @@
+# Node dev tooling (tests/mock harness only -- not shipped to Roblox)
+node_modules/
+package-lock.json
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
