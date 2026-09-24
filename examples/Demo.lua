@@ -2,9 +2,13 @@
 	examples/Demo.lua
 	====================================================================
 	Every element B0XazUI ships with, wired up the way a real script
-	would use it. Runs as-is in an executor, and also runs inside the
-	mocked environment (see tests/run.js) which is how we know the
-	documented API is the API that actually works.
+	would use it, in the engine's native "Abyss" skin. Runs as-is in
+	an executor, and also runs inside the mocked environment (see
+	tests/run.js) which is how we know the documented API is the API
+	that actually works.
+
+	For an element-for-element recreation of the original reference
+	screenshots, see examples/Abyss.lua.
 
 	Executor usage:
 
@@ -29,19 +33,19 @@ local UI = B0XazUI:Load()
 ----------------------------------------------------------------------
 
 local Window = UI:CreateWindow({
-	Title = "B0XazUI",
+	Title = "b0xaz ui",
 	SubTitle = "v" .. B0XazUI.Version,
-	Size = Vector2.new(620, 460),
+	Size = Vector2.new(560, 520),
 	ToggleKey = Enum.KeyCode.RightShift, -- hide / show the whole UI
 })
 
 ----------------------------------------------------------------------
--- Home
+-- main
 ----------------------------------------------------------------------
 
-local Home = Window:AddTab("Home")
+local Main = Window:AddTab("main")
 
-local welcome = Home:AddSection("Welcome")
+local welcome = Main:AddSection("welcome", { Column = 1 })
 
 welcome:AddLabel({
 	Text = "A UI engine built out of Instances at runtime - no Studio, no "
@@ -51,7 +55,7 @@ welcome:AddLabel({
 })
 
 welcome:AddButton({
-	Name = "Say hello",
+	Name = "say hello",
 	Callback = function()
 		UI:Notify({
 			Title = "Hello",
@@ -63,7 +67,7 @@ welcome:AddButton({
 })
 
 welcome:AddButton({
-	Name = "Fire all four notification types",
+	Name = "fire all four notification types",
 	Callback = function()
 		for _, typeName in ipairs({ "Info", "Success", "Warning", "Error" }) do
 			UI:Notify({
@@ -76,78 +80,69 @@ welcome:AddButton({
 	end,
 })
 
-local toggles = Home:AddSection("Behaviour")
-
-toggles:AddToggle({
-	Name = "Enabled",
-	Default = true,
-	Callback = function(value)
-		print("[demo] Enabled ->", value)
-	end,
-})
-
-toggles:AddToggle({
-	Name = "Start minimized",
-	Default = false,
-	Callback = function(value)
-		if value then
-			Window:SetMinimized(true)
-		end
-	end,
-})
-
-local movement = Home:AddSection("Movement")
+local movement = Main:AddSection("movement", { Column = 2 })
 
 movement:AddSlider({
-	Name = "Walk speed",
+	Name = "walk speed",
 	Min = 16,
 	Max = 200,
 	Default = 16,
 	Step = 1,
-	Suffix = " studs",
 	Callback = function(value)
-		print("[demo] Walk speed ->", value)
+		print("[demo] walk speed ->", value)
 	end,
 })
 
 movement:AddSlider({
-	Name = "Gravity scale",
+	Name = "gravity scale",
 	Min = 0,
 	Max = 3,
 	Default = 1,
 	Step = 0.05,
 	Callback = function(value)
-		print("[demo] Gravity ->", value)
+		print("[demo] gravity ->", value)
 	end,
 })
 
 movement:AddDropdown({
-	Name = "Mode",
+	Name = "mode",
 	Options = { "Walk", "Sprint", "Fly", "Noclip" },
 	Default = "Walk",
 	Callback = function(value)
-		print("[demo] Mode ->", value)
+		print("[demo] mode ->", value)
 	end,
 })
 
-movement:AddKeybind({
-	Name = "Toggle mode",
-	Default = Enum.KeyCode.F,
-	Callback = function()
-		print("[demo] Toggle mode pressed")
+local behaviour = Main:AddSection("behaviour", { Column = 1 })
+
+behaviour:AddToggle({
+	Name = "enabled",
+	Default = true,
+	Bind = Enum.KeyCode.E, -- click the chip on the right to rebind
+	Callback = function(value)
+		print("[demo] enabled ->", value)
+	end,
+})
+
+behaviour:AddToggle({
+	Name = "fly",
+	Default = false,
+	Swatch = { Default = Color3.fromRGB(150, 155, 235) },
+	Callback = function(value)
+		print("[demo] fly ->", value)
 	end,
 })
 
 ----------------------------------------------------------------------
--- Visuals
+-- visuals
 ----------------------------------------------------------------------
 
-local Visuals = Window:AddTab("Visuals")
+local Visuals = Window:AddTab("visuals")
 
-local theme = Visuals:AddSection("Theme")
+local theme = Visuals:AddSection("theme", { Column = 1 })
 
 theme:AddColorPicker({
-	Name = "Accent",
+	Name = "accent",
 	Default = UI.Theme.Accent,
 	Callback = function(color)
 		UI:SetTheme({ Accent = color })
@@ -155,7 +150,7 @@ theme:AddColorPicker({
 })
 
 theme:AddColorPicker({
-	Name = "Background",
+	Name = "background",
 	Default = UI.Theme.Background,
 	Callback = function(color)
 		UI:SetTheme({ Background = color })
@@ -163,81 +158,81 @@ theme:AddColorPicker({
 })
 
 theme:AddButton({
-	Name = "Reset theme",
+	Name = "reset theme",
 	Callback = function()
 		UI:SetTheme({
-			Accent = Color3.fromRGB(88, 140, 255),
-			Background = Color3.fromRGB(18, 18, 24),
+			Accent = Color3.fromRGB(122, 126, 214),
+			Background = Color3.fromRGB(20, 20, 24),
 		})
 		UI:Notify({ Title = "Theme reset", Duration = 2, Type = "Info" })
 	end,
 })
 
-local filters = Visuals:AddSection("Filters")
+local filters = Visuals:AddSection("filters", { Column = 2 })
 
 filters:AddDropdown({
-	Name = "Highlight",
+	Name = "highlight",
 	Options = { "None", "Team", "Enemies", "Everyone" },
 	Default = "None",
 	Callback = function(value)
-		print("[demo] Highlight ->", value)
+		print("[demo] highlight ->", value)
 	end,
 })
 
 filters:AddDropdown({
-	Name = "Tags",
+	Name = "tags",
 	Options = { "Friendly", "Hostile", "Neutral", "Loot", "Quest" },
 	Multi = true,
 	Default = { "Friendly" },
 	Callback = function(value)
-		print("[demo] Tags ->", table.concat(value, ", "))
+		print("[demo] tags ->", table.concat(value, ", "))
 	end,
 })
 
 filters:AddSlider({
-	Name = "Render distance",
+	Name = "render distance",
 	Min = 0,
 	Max = 2000,
 	Default = 500,
 	Step = 50,
 	Suffix = "m",
 	Callback = function(value)
-		print("[demo] Render distance ->", value)
+		print("[demo] render distance ->", value)
 	end,
 })
 
 ----------------------------------------------------------------------
--- Settings
+-- settings
 ----------------------------------------------------------------------
 
-local Settings = Window:AddTab("Settings")
+local Settings = Window:AddTab("settings")
 
-local identity = Settings:AddSection("Identity")
+local identity = Settings:AddSection("identity", { Column = 1 })
 
 identity:AddTextbox({
-	Name = "Display name",
+	Name = "display name",
 	Placeholder = "your name",
 	Default = "",
 	MaxLength = 20,
 	Callback = function(text)
-		print("[demo] Display name ->", text)
+		print("[demo] display name ->", text)
 	end,
 })
 
 identity:AddTextbox({
-	Name = "Refresh rate",
+	Name = "refresh rate",
 	Placeholder = "60",
 	Default = "60",
 	Numeric = true,
 	Callback = function(text)
-		print("[demo] Refresh rate ->", text)
+		print("[demo] refresh rate ->", text)
 	end,
 })
 
-local session = Settings:AddSection("Session")
+local session = Settings:AddSection("session", { Column = 2 })
 
 session:AddKeybind({
-	Name = "Toggle UI",
+	Name = "toggle ui",
 	Default = Enum.KeyCode.RightShift,
 	Callback = function()
 		Window:Toggle()
@@ -245,20 +240,20 @@ session:AddKeybind({
 })
 
 session:AddLabel({
-	Text = "The window keybind above mirrors the one passed to CreateWindow, "
-		.. "so either binding hides the UI.",
+	Text = "the window keybind above mirrors the one passed to "
+		.. "CreateWindow, so either binding hides the UI.",
 	Style = "Faint",
 })
 
 session:AddButton({
-	Name = "Minimize",
+	Name = "minimize",
 	Callback = function()
 		Window:SetMinimized(true)
 	end,
 })
 
 session:AddButton({
-	Name = "Close UI",
+	Name = "close ui",
 	Callback = function()
 		Window:Destroy()
 	end,
@@ -268,7 +263,7 @@ session:AddButton({
 -- Ready
 ----------------------------------------------------------------------
 
-Window:SelectTab(Home)
+Window:SelectTab(Main)
 
 UI:Notify({
 	Title = "B0XazUI ready",

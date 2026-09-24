@@ -67,6 +67,7 @@ async function phase(name, file) {
 
 async function main() {
 	await phase('demo  (examples/Demo.lua)', 'examples/Demo.lua');
+	await phase('abyss (examples/Abyss.lua)', 'examples/Abyss.lua');
 	await phase('spec  (tests/spec.lua)', 'tests/spec.lua');
 
 	if (failed) {

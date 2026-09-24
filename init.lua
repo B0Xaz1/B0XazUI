@@ -28,7 +28,7 @@
 
 local B0XazUI = {}
 
-B0XazUI.Version = "1.0.0"
+B0XazUI.Version = "1.1.0"
 B0XazUI.Repo = "B0Xaz1/B0XazUI"
 B0XazUI.Branch = "main"
 B0XazUI.Loaded = false

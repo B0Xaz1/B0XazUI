@@ -1,15 +1,22 @@
 --[[
 	Core/Elements/Slider.lua
-	====================================================================
-	Numeric range control with drag + click-on-track support.
+	=========================================================================
+	Numeric range control with drag + click-on-track support, drawn like
+	the original: a small dim label above a bordered bar, the accent
+	filling from the left, and the reading centred right on the bar:
+
+		smoothing [mouse]
+		+--------------------------------------------+
+		|###############      75/99                  |
+		+--------------------------------------------+
 
 		Section:AddSlider({
-			Name     = "Speed",
+			Name     = "smoothing [mouse]",
 			Min      = 0,
-			Max      = 100,
-			Default  = 25,
-			Step     = 1,        -- 0.1 gives one decimal place
-			Suffix   = "%",
+			Max      = 99,
+			Default  = 75,
+			Step     = 1,
+			Suffix   = "%",        -- "0%/100%"
 			Callback = function(value) end,
 		})
 	====================================================================
@@ -75,10 +82,10 @@ return function(UI)
 
 		------------------------------------------------------------------
 		-- Layout
-		--   [ name                    ]  [ value ]   <- 18px header
-		--   [ =================o--------------- ]   <- 6px  track
 		------------------------------------------------------------------
-		local height = config.Height or 42
+		local barHeight = Theme.SliderBarHeight
+		local barY = Theme.LabelRowHeight + 3
+		local height = config.Height or (barY + barHeight)
 
 		local Frame = Create("Frame", {
 			Name = self.Name,
@@ -91,56 +98,32 @@ return function(UI)
 		local TextLabel = Create.Label({
 			Name = "Text",
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1, -100, 0, 18),
-			Position = UDim2.new(0, 2, 0, 0),
+			Size = UDim2.new(1, 0, 0, Theme.LabelRowHeight),
+			Position = UDim2.new(0, 0, 0, 0),
 			Text = self.Name,
-			Font = Theme.FontMedium,
+			Font = Theme.Font,
 			TextSize = Theme.TextSize,
-			TextColor3 = Theme.Text,
+			TextColor3 = Theme.TextDim,
 			ZIndex = 2,
 			Parent = Frame,
 		})
-		UI:BindTheme(TextLabel, "TextColor3", "Text")
+		UI:BindTheme(TextLabel, "TextColor3", "TextDim")
 
-		local ValueLabel = Create.Label({
-			Name = "Value",
-			BackgroundTransparency = 1,
-			Size = UDim2.new(0, 96, 0, 18),
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -2, 0, 0),
-			Text = "",
-			Font = Theme.FontSemibold,
-			TextSize = Theme.TextSize,
-			TextColor3 = Theme.Accent,
-			TextXAlignment = Enum.TextXAlignment.Right,
-			ZIndex = 2,
-			Parent = Frame,
-		})
-		UI:BindTheme(ValueLabel, "TextColor3", "Accent")
-
-		local TrackHit = Create.Button({
-			Name = "TrackHit",
-			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			Size = UDim2.new(1, 0, 0, 20),
-			Position = UDim2.new(0, 0, 0, height - 20),
-			Text = "",
-			ZIndex = 2,
-			Parent = Frame,
-		})
-
-		local Track = Create("Frame", {
+		-- The bar IS the hit area.
+		local Track = Create.Button({
 			Name = "Track",
 			BackgroundColor3 = Theme.SliderTrack,
 			BorderSizePixel = 0,
-			Size = UDim2.new(1, 0, 0, 6),
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 0, 0.5, 0),
+			Size = UDim2.new(1, 0, 0, barHeight),
+			Position = UDim2.new(0, 0, 0, barY),
+			Text = "",
 			ZIndex = 3,
-			Parent = TrackHit,
+			Parent = Frame,
 		})
-		Create.Corner(3, Track)
 		UI:BindTheme(Track, "BackgroundColor3", "SliderTrack")
+		local trackStroke = Create.Stroke(Theme.StrokeSoft, 1, Track)
+		UI:BindTheme(trackStroke, "Color", "StrokeSoft")
+		self.TrackStroke = trackStroke
 
 		local Fill = Create("Frame", {
 			Name = "Fill",
@@ -150,29 +133,32 @@ return function(UI)
 			ZIndex = 4,
 			Parent = Track,
 		})
-		Create.Corner(3, Fill)
 		UI:BindTheme(Fill, "BackgroundColor3", "Accent")
 
-		local Knob = Create("Frame", {
-			Name = "Knob",
-			BackgroundColor3 = Theme.Text,
-			BorderSizePixel = 0,
-			Size = UDim2.new(0, 12, 0, 12),
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0, 0, 0.5, 0),
+		-- The reading, centred on the bar, with a soft stroke so it
+		-- stays readable over both the dark track and the accent fill.
+		local ValueLabel = Create.Label({
+			Name = "Value",
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 1, 0),
+			Position = UDim2.new(0, 0, 0, 0),
+			Text = "",
+			Font = Theme.Font,
+			TextSize = Theme.SmallTextSize,
+			TextColor3 = Theme.Text,
+			TextStrokeTransparency = 0.7,
+			TextXAlignment = Enum.TextXAlignment.Center,
 			ZIndex = 5,
 			Parent = Track,
 		})
-		Create.Corner(6, Knob)
-		UI:BindTheme(Knob, "BackgroundColor3", "Text")
+		UI:BindTheme(ValueLabel, "TextColor3", "Text")
 
 		self.Frame = Frame
 		self.TextLabel = TextLabel
 		self.ValueLabel = ValueLabel
 		self.Track = Track
-		self.TrackHit = TrackHit
+		self.TrackHit = Track -- alias kept for older call sites
 		self.Fill = Fill
-		self.Knob = Knob
 
 		self:_bindInput()
 		self:_paint(false)
@@ -208,15 +194,30 @@ return function(UI)
 	end
 
 	function Slider:_format(value)
-		return string.format("%." .. tostring(self.Decimals) .. "f", value) .. self.Suffix
+		return string.format("%." .. tostring(self.Decimals) .. "f", value)
+	end
+
+	--- "75/99", "0%/100%", "0.3/1" -- both ends carry the suffix; the
+	-- max side sheds trailing zeros ("1.0" reads as "1").
+	function Slider:_display()
+		local maxText = self:_format(self.Max)
+		if string.find(maxText, "%.") then
+			maxText = string.gsub(maxText, "0+$", "")
+			maxText = string.gsub(maxText, "%.$", "")
+		end
+		return self:_format(self.Value) .. self.Suffix .. "/" .. maxText .. self.Suffix
 	end
 
 	function Slider:_paint(animate)
 		local percent = self._percent and self:_percent() or 0
 
-		self.ValueLabel.Text = self:_format(self.Value)
-		self.Fill.Size = UDim2.new(percent, 0, 1, 0)
-		self.Knob.Position = UDim2.new(percent, 0, 0.5, 0)
+		self.ValueLabel.Text = self:_display()
+
+		if animate then
+			Tween.Fast(self.Fill, { Size = UDim2.new(percent, 0, 1, 0) })
+		else
+			self.Fill.Size = UDim2.new(percent, 0, 1, 0)
+		end
 	end
 
 	function Slider:_bindInput()
@@ -233,7 +234,7 @@ return function(UI)
 			self:SetValue(self:_fromAbsoluteX(input.Position.X), false, true)
 		end
 
-		self.Bin:Add(self.TrackHit.InputBegan:Connect(function(input)
+		self.Bin:Add(self.Track.InputBegan:Connect(function(input)
 			if not Env.IsPrimaryInput(input) then
 				return
 			end
@@ -273,12 +274,12 @@ return function(UI)
 			self.Changed:Fire(self.Value, self)
 		end))
 
-		self.Bin:Add(self.TrackHit.MouseEnter:Connect(function()
-			Tween.Fast(self.Knob, { Size = UDim2.new(0, 14, 0, 14) })
+		self.Bin:Add(self.Track.MouseEnter:Connect(function()
+			Tween.Fast(self.TrackStroke, { Color = Theme.Stroke })
 		end))
 
-		self.Bin:Add(self.TrackHit.MouseLeave:Connect(function()
-			Tween.Fast(self.Knob, { Size = UDim2.new(0, 12, 0, 12) })
+		self.Bin:Add(self.Track.MouseLeave:Connect(function()
+			Tween.Fast(self.TrackStroke, { Color = Theme.StrokeSoft })
 		end))
 	end
 

@@ -1,17 +1,20 @@
 --[[
 	Core/Elements/Keybind.lua
 	====================================================================
-	Key capture + hotkey firing.
+	Key capture + hotkey firing, drawn as a dim label with a key chip
+	parked on the right edge -- the same chip toggles wear:
 
-		Section:AddKeybind({
-			Name     = "Toggle UI",
-			Default  = Enum.KeyCode.RightControl,
-			Callback = function() print("pressed") end,
-		})
+		toggle ui                                          [ enum ]
 
-	Click the button, then press a key. Backspace / Escape clears the
+	Click the chip, then press a key. Backspace / Escape clears the
 	bind. While a TextBox has focus, input is ignored so typing never
 	accidentally rebinds or fires the hotkey.
+
+		Section:AddKeybind({
+			Name     = "toggle ui",
+			Default  = Enum.KeyCode.RightShift,
+			Callback = function() print("pressed") end,
+		})
 	====================================================================
 ]]
 
@@ -20,6 +23,7 @@ return function(UI)
 	local Create = UI.Util.Create
 	local Tween = UI.Util.Tween
 	local Env = UI.Env
+	local Layout = UI.Util.Layout
 
 	local Keybind = {}
 	Keybind.__index = Keybind
@@ -38,6 +42,16 @@ return function(UI)
 		return t == Enum.UserInputType.MouseButton1
 			or t == Enum.UserInputType.MouseButton2
 			or t == Enum.UserInputType.MouseButton3
+	end
+
+	local function shortName(keyName)
+		if keyName == nil then
+			return "None"
+		end
+		local name = Env.KeyName(keyName)
+		name = string.gsub(name, "MouseButton", "M")
+		name = string.gsub(name, "MouseWheel", "Wheel")
+		return name
 	end
 
 	function Keybind.New(section, config)
@@ -69,90 +83,75 @@ return function(UI)
 		local TextLabel = Create.Label({
 			Name = "Text",
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1, -110, 1, 0),
-			Position = UDim2.new(0, 2, 0, 0),
+			Size = UDim2.new(1, -60, 1, 0),
+			Position = UDim2.new(0, 0, 0, 0),
 			Text = self.Name,
-			Font = Theme.FontMedium,
+			Font = Theme.Font,
 			TextSize = Theme.TextSize,
-			TextColor3 = Theme.Text,
+			TextColor3 = Theme.TextDim,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 2,
 			Parent = Frame,
 		})
-		UI:BindTheme(TextLabel, "TextColor3", "Text")
+		UI:BindTheme(TextLabel, "TextColor3", "TextDim")
 
-		local BindButton = Create.Button({
-			Name = "Bind",
-			BackgroundColor3 = Theme.Element,
+		local Chip = Create.Button({
+			Name = "Chip",
+			BackgroundColor3 = Theme.Chip,
 			BorderSizePixel = 0,
-			Size = UDim2.new(0, 96, 0, 22),
+			Size = UDim2.new(0, 24, 0, Theme.ChipHeight),
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, 0, 0.5, 0),
 			Text = "",
-			Font = Theme.FontSemibold,
+			Font = Theme.Font,
 			TextSize = Theme.SmallTextSize,
+			TextColor3 = Theme.ChipText,
 			ZIndex = 2,
 			Parent = Frame,
 		})
-		Create.Corner(Theme.ElementCornerRadius, BindButton)
-		UI:BindTheme(BindButton, "BackgroundColor3", "Element")
+		Create.Padding(Theme.ChipPaddingX, Theme.ChipPaddingX, 0, 0, Chip)
+		local chipStroke = Create.Stroke(Theme.StrokeSoft, 1, Chip)
+		UI:BindTheme(Chip, "BackgroundColor3", "Chip")
 
 		self.Frame = Frame
 		self.TextLabel = TextLabel
-		self.BindButton = BindButton
+		self.BindButton = Chip
+		self.ChipStroke = chipStroke
 
 		------------------------------------------------------------------
 		-- Interaction
 		------------------------------------------------------------------
-		self.Bin:Add(BindButton.MouseEnter:Connect(function()
-			if self.Listening then
-				return
-			end
-			Tween.Fast(BindButton, { BackgroundColor3 = Theme.ElementHover })
-		end))
-
-		self.Bin:Add(BindButton.MouseLeave:Connect(function()
-			if self.Listening then
-				return
-			end
-			Tween.Fast(BindButton, { BackgroundColor3 = Theme.Element })
-		end))
-
-		self.Bin:Add(BindButton.MouseButton1Click:Connect(function()
+		self.Bin:Add(Chip.MouseButton1Click:Connect(function()
 			self:StartListening()
 		end))
 
 		-- Global listener: captures while listening, fires otherwise.
-		if not Env.UserInputService then
-			self:_paint()
-			section:AddElement(Frame, self)
-			return self
-		end
+		if Env.UserInputService then
+			self.Bin:Add(Env.UserInputService.InputBegan:Connect(function(input, gameProcessed)
+				if self.Listening then
+					-- Never steal input the game (or a TextBox) is already using.
+					if gameProcessed then
+						return
+					end
+					self:_capture(input)
+					return
+				end
 
-		self.Bin:Add(Env.UserInputService.InputBegan:Connect(function(input, gameProcessed)
-			if self.Listening then
-				-- Never steal input the game (or a TextBox) is already using.
 				if gameProcessed then
 					return
 				end
-				self:_capture(input)
-				return
-			end
 
-			if gameProcessed then
-				return
-			end
-
-			if self:Matches(input) then
-				if typeof(self.Callback) == "function" then
-					local ok, err = pcall(self.Callback, self)
-					if not ok then
-						warn(string.format("[B0XazUI] Keybind %q callback error: %s", self.Name, tostring(err)))
+				if self:Matches(input) then
+					if typeof(self.Callback) == "function" then
+						local ok, err = pcall(self.Callback, self)
+						if not ok then
+							warn(string.format("[B0XazUI] Keybind %q callback error: %s", self.Name, tostring(err)))
+						end
 					end
+					self.Changed:Fire(self.Key, self)
 				end
-				self.Changed:Fire(self.Key, self)
-			end
-		end))
+			end))
+		end
 
 		self:_paint()
 		section:AddElement(Frame, self)
@@ -168,7 +167,10 @@ return function(UI)
 	function Keybind:_capture(input)
 		if CLEAR_KEYS[input.KeyCode] and not isMouseInput(input) then
 			self:StopListening()
-			self:SetKey(nil, true)
+			self.Key = nil
+			self.MouseButton = nil
+			self:_paint()
+			self.Changed:Fire(nil, self)
 			return
 		end
 
@@ -181,34 +183,38 @@ return function(UI)
 		end
 
 		self:StopListening()
-		self:_paint()
 
 		if typeof(self.OnChanged) == "function" then
 			pcall(self.OnChanged, self.Key or self.MouseButton, self)
-		end
-
-		if typeof(self.Callback) == "function" and (self.CallbackOnBind ~= false) then
-			-- Bound keys fire on press, so don't also fire here.
 		end
 
 		self.Changed:Fire(self.Key or self.MouseButton, self)
 	end
 
 	function Keybind:_paint()
-		if self.Listening then
-			self.BindButton.Text = "..."
-			Tween.Fast(self.BindButton, {
-				BackgroundColor3 = Theme.Accent,
-				TextColor3 = Theme.TextOnAccent,
-			})
-			return
-		end
+		local chip = self.BindButton
 
-		self.BindButton.Text = self:GetName()
-		Tween.Fast(self.BindButton, {
-			BackgroundColor3 = Theme.Element,
-			TextColor3 = self:IsBound() and Theme.Text or Theme.TextFaint,
-		})
+		local text
+		if self.Listening then
+			text = "..."
+		else
+			text = self:GetName()
+		end
+		chip.Text = text
+
+		-- Size the chip to the key's name, never below a key's width.
+		local width = math.max(24, Layout.GetTextBounds(text, Theme.Font, Theme.SmallTextSize).X + Theme.ChipPaddingX * 2)
+		chip.Size = UDim2.new(0, width, 0, Theme.ChipHeight)
+
+		if self.Listening then
+			Tween.Fast(chip, { TextColor3 = Theme.AccentSoft })
+			Tween.Fast(self.ChipStroke, { Color = Theme.Accent })
+		else
+			Tween.Fast(chip, {
+				TextColor3 = self:IsBound() and Theme.ChipText or Theme.TextFaint,
+			})
+			Tween.Fast(self.ChipStroke, { Color = Theme.StrokeSoft })
+		end
 	end
 
 	----------------------------------------------------------------------
@@ -225,10 +231,10 @@ return function(UI)
 			return "..."
 		end
 		if self.MouseButton then
-			return Env.KeyName(self.MouseButton)
+			return shortName(self.MouseButton)
 		end
 		if self.Key and self.Key ~= Enum.KeyCode.Unknown then
-			return Env.KeyName(self.Key)
+			return shortName(self.Key)
 		end
 		return "None"
 	end

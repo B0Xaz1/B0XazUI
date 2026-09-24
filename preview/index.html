@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>B0XazUI — Abyss preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link
+	rel="stylesheet"
+	href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap"
+/>
+<style>
+	html, body {
+		margin: 0;
+		height: 100%;
+		background: #0a0a0d;
+		color: #888a99;
+		font-family: 'JetBrains Mono', ui-monospace, monospace;
+	}
+	#chrome {
+		height: 44px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0 14px;
+		font-size: 11px;
+		letter-spacing: 0.04em;
+		border-bottom: 1px solid #1f1f27;
+		color: #6f7186;
+	}
+	#chrome b { color: #a0a3c8; font-weight: 700; }
+	#stageWrap {
+		position: absolute;
+		inset: 44px 0 0 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		background:
+			radial-gradient(1200px 700px at 50% 40%, #101016 0%, #0a0a0d 70%);
+	}
+	#viewport {
+		position: relative;
+		background: #20202a;
+		border: 1px solid #2c2c3a;
+		transform-origin: center center;
+	}
+	.node { position: absolute; box-sizing: border-box; }
+	.text { overflow: hidden; line-height: 1.15; }
+	.nowrap { white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="chrome">
+	<span><b>B0XazUI</b> · abyss skin · the live instance tree, painted by the mock client's layout maths</span>
+	<span id="scale"></span>
+</div>
+<div id="stageWrap"><div id="viewport"></div></div>
+<script src="data.js"></script>
+
+<script>
+	// ---------------------------------------------------------------
+	// Two passes:
+	//   measure(node, w, h)  -> the size (and property-derived offset)
+	//                           Roblox would give the node inside a
+	//                           w x h content area.
+	//   renderPlaced(node, rect) -> paint at a rect the parent picked.
+	// ---------------------------------------------------------------
+
+	const FONT_STACK = '\'JetBrains Mono\', ui-monospace, \'Cascadia Code\', monospace';
+	const CHAR_FUDGE = 0.98;
+
+	const measureCanvas = document.createElement('canvas').getContext('2d');
+	function textWidth(text, size) {
+		measureCanvas.font = size + 'px ' + FONT_STACK;
+		return measureCanvas.measureText(text).width * CHAR_FUDGE;
+	}
+
+	const DECORATORS = new Set(['UICorner', 'UIStroke', 'UIPadding', 'UIListLayout', 'UIGradient', 'UIScale']);
+	const NO_PAD = { left: 0, right: 0, top: 0, bottom: 0 };
+
+	function decorator(node, cls) {
+		return (node.children || []).find((c) => c.class === cls) || null;
+	}
+	function paddingOf(node) {
+		return decorator(node, 'UIPadding') || NO_PAD;
+	}
+	function flowChildren(node) {
+		return (node.children || []).filter((c) => !DECORATORS.has(c.class) && c.visible !== false);
+	}
+
+	// Content extent used by AutomaticSize when there is no layout.
+	function freeExtent(node, outerW, outerH, depth) {
+		const pad = paddingOf(node);
+		let maxX = 0, maxY = 0;
+		for (const kid of flowChildren(node)) {
+			const ks = measure(kid, outerW, outerH, depth + 1);
+			maxX = Math.max(maxX, ks.x + ks.w);
+			maxY = Math.max(maxY, ks.y + ks.h);
+		}
+		return { w: maxX + pad.left + pad.right, h: maxY + pad.top + pad.bottom };
+	}
+
+	function measure(node, outerW, outerH, depth) {
+		depth = depth || 0;
+		if (depth > 14) return { w: 0, h: 0, x: 0, y: 0 };
+
+		let w = node.size.x.s * outerW + node.size.x.o;
+		let h = node.size.y.s * outerH + node.size.y.o;
+		const auto = node.autoSize || 'Enum.AutomaticSize.None';
+		const wantsX = auto !== 'Enum.AutomaticSize.None' && w <= 0;
+
+		if (wantsX && node.text) {
+			const pad = paddingOf(node);
+			w = Math.ceil(textWidth(node.text, node.textSize) + pad.left + pad.right);
+		}
+
+		if (auto !== 'Enum.AutomaticSize.None' && h <= 0) {
+			if (node.text) {
+				const pad = paddingOf(node);
+				const tw = textWidth(node.text, node.textSize);
+				const inner = Math.max(8, w - pad.left - pad.right);
+				const lines = Math.max(1, Math.ceil(tw / inner));
+				h = Math.ceil(lines * node.textSize * 1.25 + 2) + pad.top + pad.bottom;
+			} else if (decorator(node, 'UIListLayout')) {
+				const layout = decorator(node, 'UIListLayout');
+				const pad = paddingOf(node);
+				const kids = flowChildren(node).slice().sort((a, b) => (a.layoutOrder || 0) - (b.layoutOrder || 0));
+				const innerW = Math.max(0, w - pad.left - pad.right);
+				const innerH = Math.max(0, outerH - pad.top - pad.bottom);
+				let main = 0;
+				kids.forEach((kid, i) => {
+					const ks = measure(kid, innerW, innerH, depth + 1);
+					if (layout.horizontal) {
+						main = Math.max(main, ks.h); // auto height = tallest column
+					} else {
+						main += ks.h;
+						if (i > 0) main += layout.padding || 0;
+					}
+				});
+				h = main + pad.top + pad.bottom;
+			} else if (wantsX || flowChildren(node).length > 0) {
+				h = freeExtent(node, w, outerH, depth).h;
+			}
+		}
+
+		if (wantsX && !node.text) {
+			if (decorator(node, 'UIListLayout')) {
+				const layout = decorator(node, 'UIListLayout');
+				const pad = paddingOf(node);
+				const kids = flowChildren(node).slice().sort((a, b) => (a.layoutOrder || 0) - (b.layoutOrder || 0));
+				const innerW = Math.max(0, outerW - pad.left - pad.right);
+				const innerH = Math.max(0, h - pad.top - pad.bottom);
+				let main = 0;
+				kids.forEach((kid, i) => {
+					const ks = measure(kid, innerW, innerH, depth + 1);
+					if (layout.horizontal) {
+						main += ks.w;
+						if (i > 0) main += layout.padding || 0;
+					} else {
+						main = Math.max(main, ks.w);
+					}
+				});
+				w = main + pad.left + pad.right;
+			} else {
+				w = freeExtent(node, outerW, outerH, depth).w;
+			}
+		}
+
+		const x = node.position.x.s * outerW + node.position.x.o - node.anchor.x * w;
+		const y = node.position.y.s * outerH + node.position.y.o - node.anchor.y * h;
+
+		return { w: Math.max(0, Math.round(w)), h: Math.max(0, Math.round(h)), x: Math.round(x), y: Math.round(y) };
+	}
+
+	function rgba(c, alpha) {
+		return `rgba(${c.r},${c.g},${c.b},${alpha})`;
+	}
+
+	function renderPlaced(node, rect, depth) {
+		depth = depth || 0;
+
+		const el = document.createElement('div');
+		el.className = 'node';
+		el.style.cssText = `left:${rect.x}px;top:${rect.y}px;width:${rect.w}px;height:${rect.h}px;z-index:${node.zIndex || 1};`;
+
+		if (node.bgAlpha < 1) el.style.background = rgba(node.bg, 1 - node.bgAlpha);
+
+		const corner = decorator(node, 'UICorner');
+		if (corner && corner.radius > 0) el.style.borderRadius = corner.radius + 'px';
+
+		const stroke = decorator(node, 'UIStroke');
+		if (stroke && stroke.transparency < 1) {
+			el.style.boxShadow = `inset 0 0 0 ${stroke.thickness}px ${rgba(stroke.color, 1 - stroke.transparency)}`;
+		}
+
+		const gradient = decorator(node, 'UIGradient');
+		if (gradient && gradient.alpha && gradient.alpha.length >= 2) {
+			const t0 = gradient.alpha[0], t1 = gradient.alpha[gradient.alpha.length - 1];
+			el.style.background = `linear-gradient(${gradient.rotation === 90 ? 'to bottom' : 'to right'}, ${rgba(node.bg, 1 - t0.a)}, ${rgba(node.bg, 1 - t1.a)})`;
+		} else if (gradient && gradient.color && gradient.color.length > 1) {
+			const stops = gradient.color.map((s) => `rgb(${s.r},${s.g},${s.b}) ${s.t * 100}%`).join(',');
+			el.style.background = `linear-gradient(to right, ${stops})`;
+		}
+
+		if (node.clips || node.class === 'ScrollingFrame') el.style.overflow = 'hidden';
+
+		const pad = paddingOf(node);
+
+		if (node.text !== undefined && node.text !== '') {
+			const span = document.createElement('div');
+			span.className = 'text';
+			span.style.cssText = `
+				position:absolute;left:${pad.left}px;top:${pad.top}px;
+				right:${pad.right}px;bottom:${pad.bottom}px;
+				font-family:${FONT_STACK};
+				font-size:${node.textSize}px;
+				color:${rgba(node.textColor, 1 - (node.textAlpha || 0))};
+				display:flex;
+				align-items:${node.yAlign === 'Enum.TextYAlignment.Top' ? 'flex-start' : node.yAlign === 'Enum.TextYAlignment.Bottom' ? 'flex-end' : 'center'};
+				justify-content:${node.xAlign === 'Enum.TextXAlignment.Center' ? 'center' : node.xAlign === 'Enum.TextXAlignment.Right' ? 'flex-end' : 'flex-start'};
+			`;
+			const inner = document.createElement('span');
+			inner.textContent = node.text;
+			if (node.truncate) inner.className = 'nowrap';
+			if (node.strokeAlpha !== undefined && node.strokeAlpha < 0.9) {
+				inner.style.textShadow = '0 1px 2px rgba(0,0,0,0.6)';
+			}
+			span.appendChild(inner);
+			el.appendChild(span);
+		}
+
+		const content = { x: pad.left, y: pad.top, w: Math.max(0, rect.w - pad.left - pad.right), h: Math.max(0, rect.h - pad.top - pad.bottom) };
+		const layout = decorator(node, 'UIListLayout');
+		const kids = flowChildren(node).slice().sort((a, b) => (a.layoutOrder || 0) - (b.layoutOrder || 0));
+
+		if (layout) {
+			let main = layout.horizontal ? content.x : content.y;
+			for (const kid of kids) {
+				const ks = measure(kid, content.w, content.h, depth + 1);
+				let kx, ky;
+				if (layout.horizontal) {
+					kx = main;
+					ky = content.y + (layout.yAlign === 'Enum.VerticalAlignment.Center' ? (content.h - ks.h) / 2 : 0);
+					main += ks.w + (layout.padding || 0);
+				} else {
+					kx = content.x + (layout.xAlign === 'Enum.HorizontalAlignment.Center' ? (content.w - ks.w) / 2 : 0);
+					ky = main;
+					main += ks.h + (layout.padding || 0);
+				}
+				el.appendChild(renderPlaced(kid, { x: kx, y: ky, w: ks.w, h: ks.h }, depth + 1));
+			}
+		} else {
+			for (const kid of kids) {
+				const ks = measure(kid, content.w, content.h, depth + 1);
+				el.appendChild(renderPlaced(kid, { x: content.x + ks.x, y: content.y + ks.y, w: ks.w, h: ks.h }, depth + 1));
+			}
+		}
+
+		return el;
+	}
+
+	async function boot() {
+		const data = window.__PREVIEW_DATA__ || (await (await fetch('data.json')).json());
+		const viewport = document.getElementById('viewport');
+		viewport.style.width = data.screen.x + 'px';
+		viewport.style.height = data.screen.y + 'px';
+		viewport.appendChild(renderPlaced(data.tree, { x: 0, y: 0, w: data.screen.x, h: data.screen.y }));
+
+		const fit = () => {
+			const wrap = document.getElementById('stageWrap');
+			const scale = Math.min(
+				(wrap.clientWidth - 48) / data.screen.x,
+				(wrap.clientHeight - 48) / data.screen.y,
+				1
+			);
+			viewport.style.transform = `scale(${scale})`;
+			document.getElementById('scale').textContent =
+				`${data.screen.x}x${data.screen.y} viewport @ ${Math.round(scale * 100)}%`;
+		};
+		window.addEventListener('resize', fit);
+		fit();
+	}
+
+	boot();
+</script>
+</body>
+</html>

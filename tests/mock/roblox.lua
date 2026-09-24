@@ -519,6 +519,34 @@ function Mock._computeAbsoluteSize(instance)
 			if w == 0 then
 				w = content.X
 			end
+		elseif instance.__ClassName == "TextLabel"
+			or instance.__ClassName == "TextButton"
+			or instance.__ClassName == "TextBox" then
+			-- No layout: text elements measure their own text (+padding),
+			-- the way Roblox's real AutomaticSize does.
+			local text = tostring(instance.__Properties.Text or "")
+			local textSize = instance.__Properties.TextSize or 12
+			if automatic == Enum.AutomaticSize.X and w == 0 and text ~= "" then
+				local padX = 0
+				for i = 1, #instance.__Children do
+					if instance.__Children[i].__ClassName == "UIPadding" then
+						local pad = instance.__Children[i].__Properties
+						padX = (pad.PaddingLeft and pad.PaddingLeft.Offset or 0)
+							+ (pad.PaddingRight and pad.PaddingRight.Offset or 0)
+					end
+				end
+				w = math.ceil(#text * textSize * 0.52) + padX
+			end
+			if (automatic == Enum.AutomaticSize.Y or automatic == Enum.AutomaticSize.XY)
+				and h == 0
+				and text ~= "" then
+				local lines = 1
+				local charWidth = textSize * 0.52
+				if w > 0 and #text * charWidth > w then
+					lines = math.ceil((#text * charWidth) / w)
+				end
+				h = math.ceil(lines * (textSize + 3))
+			end
 		end
 	end
 

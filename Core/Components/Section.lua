@@ -1,14 +1,24 @@
 --[[
 	Core/Components/Section.lua
 	====================================================================
-	A collapsible group of elements inside a tab page.
+	A collapsible group of elements inside a tab column, drawn the way
+	the original design draws it: not a header bar but a fieldset. The
+	box gets a one-pixel outline and its title sits ON the top border,
+	a background-coloured patch cutting the line behind the text:
 
-	+--------------------------------------------+
-	|  SECTION TITLE                          v  |  header
-	+--------------------------------------------+
-	|  [ element ]                               |  body (auto height)
-	|  [ element ]                               |
-	+--------------------------------------------+
+	     title                             <- patch covers the border
+	  --+-------+--------------------------------------
+	  |                                             |
+	  |  [ element ]                                |  box (auto height)
+	  |  [ element ]                                |
+	  +---------------------------------------------+
+
+	Layout trick, in case it needs touching: the section frame is a
+	vertical list of [Strut, Box]. The Strut is exactly half the title
+	height (7px), and the title button inside it is 14px tall starting
+	at its top edge -- so the text straddles the box border below. The
+	Strut has no list layout of its own, which is how the title gets to
+	keep its hand-made position.
 
 	Sections expose the element constructors. Every element module
 	registers itself on UI.Elements, and Section forwards to it, so
@@ -37,69 +47,88 @@ return function(UI)
 		self.Expanded = config.Collapsed ~= true
 		self.Bin = UI.Util.Bin.new()
 
+		local titleHalf = math.ceil(Theme.SectionTitleHeight / 2)
+
+		-- Parent is the column the section was created for.
+		local container = tab.Columns[config.Column or 1] or tab.Columns[1] or tab.Page
+
 		------------------------------------------------------------------
-		-- Outer frame (auto height: header + body)
+		-- Outer frame: vertical list of [strut, box]
 		------------------------------------------------------------------
 		local Frame = Create("Frame", {
 			Name = self.Title,
-			BackgroundColor3 = Theme.Section,
+			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			AutomaticSize = Enum.AutomaticSize.Y,
 			Size = UDim2.new(1, 0, 0, 0),
 			ZIndex = 1,
-			Parent = tab.Page,
+			Parent = container,
 		})
-		Create.Corner(Theme.CornerRadius, Frame)
-		local stroke = Create.Stroke(Theme.StrokeSoft, 1, Frame)
-		UI:BindTheme(Frame, "BackgroundColor3", "Section")
-		UI:BindTheme(stroke, "Color", "StrokeSoft")
-
-		-- Column: header, then body.
-		local Column = Create.List(0, Frame)
+		Create.List(0, Frame)
 
 		------------------------------------------------------------------
-		-- Header
+		-- Strut + title patch (the legend on the border)
 		------------------------------------------------------------------
-		local Header = Create.Button({
-			Name = "Header",
+		local Strut = Create("Frame", {
+			Name = "Strut",
+			LayoutOrder = 1,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
-			Size = UDim2.new(1, 0, 0, Theme.SectionHeaderHeight),
-			Text = "",
-			ZIndex = 2,
+			Size = UDim2.new(1, 0, 0, titleHalf),
+			ZIndex = 3,
 			Parent = Frame,
 		})
 
-		local HeaderLabel = Create.Label({
-			Name = "Title",
-			BackgroundTransparency = 1,
-			Size = UDim2.new(1, -34, 1, 0),
-			Position = UDim2.new(0, Theme.ElementPadding, 0, 0),
+		-- Full title height (14) hanging off the top edge of the strut,
+		-- so its lower half overlaps the box border.
+		local Header = Create.Button({
+			Name = "Header",
+			BackgroundColor3 = Theme.Background,
+			BorderSizePixel = 0,
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.new(0, 0, 0, Theme.SectionTitleHeight),
+			Position = UDim2.new(0, Theme.SectionInset - Theme.SectionPatchPad, 0, 0),
 			Text = self.Title,
-			Font = Theme.FontSemibold,
+			Font = Theme.Font,
 			TextSize = Theme.SectionTextSize,
-			TextColor3 = Theme.Text,
-			ZIndex = 3,
-			Parent = Header,
+			TextColor3 = Theme.TextDim,
+			ZIndex = 6,
+			Parent = Strut,
 		})
-		UI:BindTheme(HeaderLabel, "TextColor3", "Text")
-
-		local Chevron = Create.Label({
-			Name = "Chevron",
-			BackgroundTransparency = 1,
-			Size = UDim2.new(0, 24, 1, 0),
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -8, 0, 0),
-			Text = self.Expanded and Theme.Icons.Expand or Theme.Icons.Collapse,
-			TextSize = 11,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			ZIndex = 3,
-			Parent = Header,
-		})
+		Create.Padding(Theme.SectionPatchPad, Theme.SectionPatchPad, 0, 0, Header)
+		UI:BindTheme(Header, "BackgroundColor3", "Background")
+		UI:BindTheme(Header, "TextColor3", "TextDim")
 
 		------------------------------------------------------------------
-		-- Body
+		-- Box: the outlined fieldset body
 		------------------------------------------------------------------
+		local Box = Create("Frame", {
+			Name = "Box",
+			LayoutOrder = 2,
+			BackgroundColor3 = Theme.Section,
+			BorderSizePixel = 0,
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.new(1, 0, 0, 0),
+			ZIndex = 2,
+			Parent = Frame,
+		})
+		if Theme.CornerRadius > 0 then
+			Create.Corner(Theme.CornerRadius, Box)
+		end
+		local boxStroke = Create.Stroke(Theme.Stroke, 1, Box)
+		UI:BindTheme(Box, "BackgroundColor3", "Section")
+		UI:BindTheme(boxStroke, "Color", "Stroke")
+
+		-- Top padding: the title's lower half + a little air.
+		Create.Padding(
+			Theme.SectionInset,
+			Theme.SectionInset,
+			titleHalf + 4,
+			Theme.SectionInset - 1,
+			Box
+		)
+		Create.List(0, Box)
+
 		local Body = Create("Frame", {
 			Name = "Body",
 			BackgroundTransparency = 1,
@@ -107,25 +136,18 @@ return function(UI)
 			AutomaticSize = Enum.AutomaticSize.Y,
 			Size = UDim2.new(1, 0, 0, 0),
 			Visible = self.Expanded,
-			ZIndex = 2,
-			Parent = Frame,
+			ZIndex = 3,
+			Parent = Box,
 		})
-		Create.Padding(
-			Theme.ElementPadding,
-			Theme.ElementPadding,
-			0,
-			Theme.ElementPadding,
-			Body
-		)
-
-		local bodyLayout = Create.List(Theme.ElementSpacing, Body)
+		Create.List(Theme.ElementSpacing, Body, Enum.HorizontalAlignment.Left)
 
 		self.Frame = Frame
+		self.Strut = Strut
 		self.Header = Header
-		self.HeaderLabel = HeaderLabel
-		self.Chevron = Chevron
+		self.HeaderLabel = Header -- the button IS the title text
+		self.Box = Box
+		self.BoxStroke = boxStroke
 		self.Body = Body
-		self.BodyLayout = bodyLayout
 
 		------------------------------------------------------------------
 		-- Interaction
@@ -135,13 +157,11 @@ return function(UI)
 		end))
 
 		self.Bin:Add(Header.MouseEnter:Connect(function()
-			Tween.Fast(HeaderLabel, { TextColor3 = Theme.Text })
-			Tween.Fast(Chevron, { TextColor3 = Theme.Text })
+			Tween.Fast(Header, { TextColor3 = Theme.Text })
 		end))
 
 		self.Bin:Add(Header.MouseLeave:Connect(function()
-			Tween.Fast(HeaderLabel, { TextColor3 = Theme.Text })
-			Tween.Fast(Chevron, { TextColor3 = Theme.TextDim })
+			Tween.Fast(Header, { TextColor3 = Theme.TextDim })
 		end))
 
 		return self
@@ -185,12 +205,11 @@ return function(UI)
 	function Section:SetExpanded(expanded)
 		self.Expanded = expanded and true or false
 		self.Body.Visible = self.Expanded
-		self.Chevron.Text = self.Expanded and Theme.Icons.Expand or Theme.Icons.Collapse
 	end
 
 	function Section:SetTitle(title)
 		self.Title = tostring(title or "Section")
-		self.HeaderLabel.Text = self.Title
+		self.Header.Text = self.Title
 		self.Frame.Name = self.Title
 	end
 

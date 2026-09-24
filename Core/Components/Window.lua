@@ -1,20 +1,24 @@
 --[[
 	Core/Components/Window.lua
 	====================================================================
-	The window shell:
+	The window shell, in the "Abyss" style:
 
-		+------------------------------+---------+
-		| Title            [ - ] [ x ] | topbar  |  draggable
-		+------------------------------+---------+
-		|  Main   Visuals   Settings   | tabbar  |  horizontal tabs
-		+------------------------------+---------+
-		|                              |         |
-		|   ( active tab page )        | content |  per-tab scroll page
-		|                              |         |
-		+------------------------------+---------+
+		+-------------------------------------------------------------+
+		| title | subtitle                                     -   x  |  24px title strip
+		+-------------------------------------------------------------+
+		|  [ main ]   rage                                            |  26px boxed tabs
+		+-------------------------------------------------------------+
+		|                                                             |
+		|   ( active tab page )                                       |
+		|                                                             |
+		|  _________________________________________________________  |  accent glow
+		|  =========================================================  |  2px accent strip
+		+-------------------------------------------------------------+
 
 	One ScreenGui is shared by every window; each window is a Frame
 	inside it, so Z-index and input behave predictably.
+
+	Everything is square: a one-pixel UIStroke does the bordering.
 	====================================================================
 ]]
 
@@ -59,7 +63,7 @@ return function(UI)
 		self.Bin = UI.Util.Bin.new()
 		self.Connections = {}
 
-		local size = config.Size or Vector2.new(640, 460)
+		local size = config.Size or Vector2.new(600, 480)
 		self.Size = size
 
 		local screenGui = UI:GetScreenGui()
@@ -78,7 +82,9 @@ return function(UI)
 			Parent = screenGui,
 		})
 
-		Create.Corner(Theme.CornerRadius, Root)
+		if Theme.CornerRadius > 0 then
+			Create.Corner(Theme.CornerRadius, Root)
+		end
 		local stroke = Create.Stroke(Theme.Stroke, 1, Root)
 
 		self.Root = Root
@@ -97,7 +103,7 @@ return function(UI)
 		end
 
 		------------------------------------------------------------------
-		-- Topbar
+		-- Topbar: the title strip
 		------------------------------------------------------------------
 		local Topbar = Create("Frame", {
 			Name = "Topbar",
@@ -115,62 +121,64 @@ return function(UI)
 			BackgroundColor3 = Theme.Divider,
 			BorderSizePixel = 0,
 			Size = UDim2.new(1, 0, 0, 1),
-			Position = UDim2.new(0, 0, 1, -1),
+			Position = UDim2.new(0, 0, 1, 0),
 			ZIndex = 2,
 			Parent = Topbar,
 		})
 		UI:BindTheme(topbarLine, "BackgroundColor3", "Divider")
 
-		-- Title + subtitle, auto-sized horizontally.
+		-- "title  |  subtitle" sits flush left, tiny and dim.
 		local TitleArea = Create("Frame", {
 			Name = "TitleArea",
 			BackgroundTransparency = 1,
 			AutomaticSize = Enum.AutomaticSize.X,
 			Size = UDim2.new(0, 0, 1, 0),
-			Position = UDim2.new(0, 12, 0, 0),
+			Position = UDim2.new(0, 8, 0, 0),
 			ZIndex = 2,
 			Parent = Topbar,
 		})
-		Create.Row(6, TitleArea)
+		Create.Row(4, TitleArea)
 
 		self.TitleLabel = Create.Label({
 			Name = "Title",
 			AutomaticSize = Enum.AutomaticSize.X,
 			Size = UDim2.new(0, 0, 1, 0),
 			Text = config.Title or "B0XazUI",
-			Font = Theme.FontSemibold,
-			TextSize = Theme.TitleTextSize,
-			TextColor3 = Theme.Text,
-			ZIndex = 3,
-			Parent = TitleArea,
-		})
-		UI:BindTheme(self.TitleLabel, "TextColor3", "Text")
-
-		self.SubTitleLabel = Create.Label({
-			Name = "SubTitle",
-			AutomaticSize = Enum.AutomaticSize.X,
-			Size = UDim2.new(0, 0, 1, 0),
-			Text = config.SubTitle or (config.Subtitle or ""),
 			Font = Theme.Font,
-			TextSize = Theme.SmallTextSize,
+			TextSize = Theme.TitleTextSize,
 			TextColor3 = Theme.TextDim,
 			ZIndex = 3,
 			Parent = TitleArea,
 		})
-		UI:BindTheme(self.SubTitleLabel, "TextColor3", "TextDim")
+		UI:BindTheme(self.TitleLabel, "TextColor3", "TextDim")
 
-		-- Window control buttons.
+		local subTitle = config.SubTitle or config.Subtitle or ""
+		self.SubTitleLabel = Create.Label({
+			Name = "SubTitle",
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.new(0, 0, 1, 0),
+			Text = subTitle ~= "" and ("|  " .. tostring(subTitle)) or "",
+			Visible = subTitle ~= "",
+			Font = Theme.Font,
+			TextSize = Theme.SmallTextSize,
+			TextColor3 = Theme.TextFaint,
+			ZIndex = 3,
+			Parent = TitleArea,
+		})
+		UI:BindTheme(self.SubTitleLabel, "TextColor3", "TextFaint")
+
+		-- Window controls: bare text glyphs, nothing more.
 		local Controls = Create("Frame", {
 			Name = "Controls",
 			BackgroundTransparency = 1,
 			AutomaticSize = Enum.AutomaticSize.X,
-			Size = UDim2.new(0, 0, 0, 24),
+			Size = UDim2.new(0, 0, 0, 14),
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -10, 0.5, 0),
+			Position = UDim2.new(1, -8, 0.5, 0),
 			ZIndex = 3,
 			Parent = Topbar,
 		})
-		Create.Row(6, Controls)
+		Create.Row(10, Controls)
 
 		self.MinimizeButton = self:_controlButton(Controls, "Minimize", Theme.Icons.Minimize, function()
 			self:SetMinimized(not self.Minimized)
@@ -211,7 +219,7 @@ return function(UI)
 			BackgroundColor3 = Theme.Divider,
 			BorderSizePixel = 0,
 			Size = UDim2.new(1, 0, 0, 1),
-			Position = UDim2.new(0, 0, 1, -1),
+			Position = UDim2.new(0, 0, 1, 0),
 			ZIndex = 2,
 			Parent = TabBar,
 		})
@@ -231,14 +239,14 @@ return function(UI)
 			ZIndex = 2,
 			Parent = TabBar,
 		})
-		Create.Padding(0, 8, 0, 0, TabScroll)
+		Create.Padding(8, 8, 0, 0, TabScroll)
 
 		local tabLayout = Create("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
 			HorizontalAlignment = Enum.HorizontalAlignment.Left,
 			VerticalAlignment = Enum.VerticalAlignment.Center,
 			SortOrder = Enum.SortOrder.LayoutOrder,
-			Padding = UDim.new(0, 2),
+			Padding = UDim.new(0, 4),
 			Parent = TabScroll,
 		})
 		Layout.BindCanvasSizeHorizontal(TabScroll, tabLayout, 16, self.Bin)
@@ -256,11 +264,48 @@ return function(UI)
 			Parent = Root,
 		})
 
+		-- The blurple strip along the bottom edge of the window, with a
+		-- faint glow fading up from it. A quiet but defining detail of
+		-- the original design.
+		local Glow = Create("Frame", {
+			Name = "AccentGlow",
+			BackgroundColor3 = Theme.Accent,
+			BackgroundTransparency = 0.45,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, Theme.AccentGlowHeight),
+			Position = UDim2.new(0, 0, 1, -(Theme.AccentGlowHeight + Theme.AccentStripHeight)),
+			ZIndex = 3,
+			Parent = Content,
+		})
+		Create.New("UIGradient", {
+			Rotation = 90,
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(1, 0.55),
+			}),
+			Parent = Glow,
+		})
+		UI:BindTheme(Glow, "BackgroundColor3", "Accent")
+
+		local Strip = Create("Frame", {
+			Name = "AccentStrip",
+			BackgroundColor3 = Theme.Accent,
+			BackgroundTransparency = 0.25,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, Theme.AccentStripHeight),
+			Position = UDim2.new(0, 0, 1, -Theme.AccentStripHeight),
+			ZIndex = 3,
+			Parent = Content,
+		})
+		UI:BindTheme(Strip, "BackgroundColor3", "Accent")
+
 		self.Topbar = Topbar
 		self.TabBar = TabBar
 		self.TabScroll = TabScroll
 		self.Content = Content
 		self.TabLayout = tabLayout
+		self.AccentStrip = Strip
+		self.AccentGlow = Glow
 
 		------------------------------------------------------------------
 		-- Behaviour
@@ -296,28 +341,27 @@ return function(UI)
 	-- Internals
 	----------------------------------------------------------------------
 
-	--- Window chrome button. `icon` is an emoji (see Theme.Icons): Roblox's
-	-- UI font has no glyph for the plain text symbols these used to use, so
-	-- they came back as empty boxes. Emoji draw in colour and ignore
-	-- TextColor3, so the button background carries the state instead.
+	--- Window chrome button: a bare text glyph ("-" / "x") that lights
+	-- up on hover. No background, no box -- that is the original's way.
 	function Window:_controlButton(parent, name, icon, onClick)
 		local button = Create.Button({
 			Name = name,
-			Size = UDim2.new(0, 24, 0, 24),
-			BackgroundColor3 = Theme.Element,
+			Size = UDim2.new(0, 14, 0, 14),
+			BackgroundTransparency = 1,
 			Text = icon,
-			TextSize = 12,
+			Font = Theme.Font,
+			TextSize = Theme.TitleTextSize,
+			TextColor3 = Theme.TextFaint,
 			ZIndex = 4,
 			Parent = parent,
 		})
-		Create.Corner(6, button)
-		UI:BindTheme(button, "BackgroundColor3", "Element")
+		UI:BindTheme(button, "TextColor3", "TextFaint")
 
 		table.insert(self.Connections, button.MouseEnter:Connect(function()
-			Tween.Fast(button, { BackgroundColor3 = Theme.ElementHover })
+			Tween.Fast(button, { TextColor3 = Theme.Text })
 		end))
 		table.insert(self.Connections, button.MouseLeave:Connect(function()
-			Tween.Fast(button, { BackgroundColor3 = Theme.Element })
+			Tween.Fast(button, { TextColor3 = Theme.TextFaint })
 		end))
 		table.insert(self.Connections, button.MouseButton1Click:Connect(onClick))
 
@@ -386,7 +430,9 @@ return function(UI)
 	function Window:SetTitle(title, subtitle)
 		self.TitleLabel.Text = tostring(title or "")
 		if subtitle ~= nil then
-			self.SubTitleLabel.Text = tostring(subtitle)
+			local text = tostring(subtitle)
+			self.SubTitleLabel.Text = text ~= "" and ("|  " .. text) or ""
+			self.SubTitleLabel.Visible = text ~= ""
 		end
 	end
 
@@ -397,7 +443,7 @@ return function(UI)
 		end
 	end
 
-	--- Collapses the window down to just its topbar.
+	--- Collapses the window down to just its title strip.
 	function Window:SetMinimized(state)
 		state = state and true or false
 		if self.Minimized == state then
