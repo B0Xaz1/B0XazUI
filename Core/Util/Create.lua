@@ -84,22 +84,18 @@ return function(UI)
 		})
 	end
 
+	--- Create.Padding(8, parent) pads every side;
+	-- Create.Padding(left, right, top, bottom, parent) pads per-side.
 	function Create.Padding(left, right, top, bottom, parent)
-		if typeof(left) == "number" then
-			return Create.New("UIPadding", {
-				PaddingLeft = UDim.new(0, left),
-				PaddingRight = UDim.new(0, left),
-				PaddingTop = UDim.new(0, left),
-				PaddingBottom = UDim.new(0, left),
-				Parent = parent,
-			})
+		if right == nil and top == nil and bottom == nil then
+			right, top, bottom = left, left, left
 		end
 
 		return Create.New("UIPadding", {
-			PaddingLeft = UDim.new(0, left or 0),
-			PaddingRight = UDim.new(0, right or 0),
-			PaddingTop = UDim.new(0, top or 0),
-			PaddingBottom = UDim.new(0, bottom or 0),
+			PaddingLeft = UDim.new(0, tonumber(left) or 0),
+			PaddingRight = UDim.new(0, tonumber(right) or 0),
+			PaddingTop = UDim.new(0, tonumber(top) or 0),
+			PaddingBottom = UDim.new(0, tonumber(bottom) or 0),
 			Parent = parent,
 		})
 	end

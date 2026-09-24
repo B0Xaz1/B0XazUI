@@ -1,13 +1,23 @@
 --[[
 	Core/Elements/Dropdown.lua
 	====================================================================
-	Select (or multi-select) list that expands inline below its header,
+	Select (or multi-select) list, in the original's shape: a small
+	label above a bordered box, the chosen value inside the box, a "+"
+	pinned to its right edge. The list expands inline below the box,
 	so nothing is clipped by the page's scrolling frame.
 
+		hitbox priority
+		+------------------------------------------+
+		| Head                                   + |
+		+------------------------------------------+
+		| Head                                       <- selected = accent
+		| Torso
+		| Limbs
+
 		Section:AddDropdown({
-			Name     = "Mode",
-			Options  = { "Fast", "Balanced", "Precise" },
-			Default  = "Balanced",
+			Name     = "hitbox priority",
+			Options  = { "Head", "Torso", "Limbs" },
+			Default  = "Head",
 			Multi    = false,
 			Callback = function(value) end,
 		})
@@ -26,7 +36,7 @@ return function(UI)
 	local Dropdown = {}
 	Dropdown.__index = Dropdown
 
-	local OPTION_HEIGHT = 24
+	local OPTION_HEIGHT = 17
 
 	--- Normalises an option entry into { Text, Value }.
 	local function normalise(option, index)
@@ -80,104 +90,110 @@ return function(UI)
 			Size = UDim2.new(1, 0, 0, 0),
 			ZIndex = 1,
 		})
-
-		local Column = Create.List(4, Frame)
-
-		local Header = Create.Button({
-			Name = "Header",
-			BackgroundColor3 = Theme.Element,
-			BorderSizePixel = 0,
-			Size = UDim2.new(1, 0, 0, Theme.ElementHeight),
-			Text = "",
-			ZIndex = 2,
-			Parent = Frame,
-		})
-		Create.Corner(Theme.ElementCornerRadius, Header)
-		UI:BindTheme(Header, "BackgroundColor3", "Element")
+		Create.List(3, Frame, Enum.HorizontalAlignment.Left)
 
 		local TextLabel = Create.Label({
 			Name = "Text",
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1, -80, 1, 0),
-			Position = UDim2.new(0, 10, 0, 0),
+			Size = UDim2.new(1, 0, 0, Theme.LabelRowHeight),
 			Text = self.Name,
-			Font = Theme.FontMedium,
+			Font = Theme.Font,
 			TextSize = Theme.TextSize,
-			TextColor3 = Theme.Text,
-			ZIndex = 3,
-			Parent = Header,
+			TextColor3 = Theme.TextDim,
+			ZIndex = 2,
+			Parent = Frame,
 		})
-		UI:BindTheme(TextLabel, "TextColor3", "Text")
+		UI:BindTheme(TextLabel, "TextColor3", "TextDim")
 
-		local Chevron = Create.Label({
-			Name = "Chevron",
-			BackgroundTransparency = 1,
-			Size = UDim2.new(0, 18, 1, 0),
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -10, 0, 0),
-			Text = Theme.Icons.Down,
-			TextSize = 11,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			ZIndex = 3,
-			Parent = Header,
+		local Box = Create.Button({
+			Name = "Box",
+			BackgroundColor3 = Theme.Input,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, Theme.BoxHeight),
+			Text = "",
+			ZIndex = 2,
+			Parent = Frame,
 		})
+		UI:BindTheme(Box, "BackgroundColor3", "Input")
+		local boxStroke = Create.Stroke(Theme.StrokeSoft, 1, Box)
+		UI:BindTheme(boxStroke, "Color", "StrokeSoft")
 
 		local ValueLabel = Create.Label({
 			Name = "Value",
 			BackgroundTransparency = 1,
-			Size = UDim2.new(0, 46, 1, 0),
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -28, 0, 0),
+			Size = UDim2.new(1, -26, 1, 0),
+			Position = UDim2.new(0, 7, 0, 0),
 			Text = "",
 			Font = Theme.Font,
-			TextSize = Theme.SmallTextSize,
-			TextColor3 = Theme.TextDim,
-			TextXAlignment = Enum.TextXAlignment.Right,
+			TextSize = Theme.TextSize,
+			TextColor3 = Theme.Text,
+			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 3,
-			Parent = Header,
+			Parent = Box,
 		})
+		UI:BindTheme(ValueLabel, "TextColor3", "Text")
+
+		local Plus = Create.Label({
+			Name = "Chevron",
+			BackgroundTransparency = 1,
+			Size = UDim2.new(0, 14, 1, 0),
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -4, 0, 0),
+			Text = Theme.Icons.Down, -- "+"
+			Font = Theme.Font,
+			TextSize = Theme.TextSize,
+			TextColor3 = Theme.TextFaint,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			ZIndex = 3,
+			Parent = Box,
+		})
+		UI:BindTheme(Plus, "TextColor3", "TextFaint")
 
 		------------------------------------------------------------------
 		-- Option list (inline, collapsible)
 		------------------------------------------------------------------
 		local List = Create("ScrollingFrame", {
 			Name = "List",
-			BackgroundTransparency = 1,
+			BackgroundColor3 = Theme.Input,
 			BorderSizePixel = 0,
 			Size = UDim2.new(1, 0, 0, 0),
 			CanvasSize = UDim2.new(0, 0, 0, 0),
-			ScrollBarThickness = 3,
+			ScrollBarThickness = 2,
 			ScrollBarImageColor3 = Theme.Scrollbar,
-			ScrollBarImageTransparency = 0.5,
+			ScrollBarImageTransparency = 0.4,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
 			ZIndex = 2,
 			Parent = Frame,
 		})
+		UI:BindTheme(List, "BackgroundColor3", "Input")
+		local listStroke = Create.Stroke(Theme.StrokeSoft, 1, List)
+		UI:BindTheme(listStroke, "Color", "StrokeSoft")
+		Create.Padding(2, 2, 2, 2, List)
 
-		local listLayout = Create.List(2, List)
-		Create.Padding(4, 4, 4, 4, List)
+		local listLayout = Create.List(0, List, Enum.HorizontalAlignment.Left)
 
 		self.Frame = Frame
-		self.Header = Header
+		self.Header = Box -- alias: older call sites used the header as the click target
+		self.Box = Box
 		self.TextLabel = TextLabel
 		self.ValueLabel = ValueLabel
-		self.Chevron = Chevron
+		self.Chevron = Plus
 		self.List = List
 		self.ListLayout = listLayout
 
 		------------------------------------------------------------------
 		-- Interaction
 		------------------------------------------------------------------
-		self.Bin:Add(Header.MouseEnter:Connect(function()
-			Tween.Fast(Header, { BackgroundColor3 = Theme.ElementHover })
+		self.Bin:Add(Box.MouseEnter:Connect(function()
+			Tween.Fast(boxStroke, { Color = Theme.Stroke })
 		end))
 
-		self.Bin:Add(Header.MouseLeave:Connect(function()
-			Tween.Fast(Header, { BackgroundColor3 = Theme.Element })
+		self.Bin:Add(Box.MouseLeave:Connect(function()
+			Tween.Fast(boxStroke, { Color = Theme.StrokeSoft })
 		end))
 
-		self.Bin:Add(Header.MouseButton1Click:Connect(function()
+		self.Bin:Add(Box.MouseButton1Click:Connect(function()
 			self:SetOpen(not self.Open)
 		end))
 
@@ -207,7 +223,7 @@ return function(UI)
 			end)
 			content = (ok and typeof(content) == "Vector2") and content.Y or 0
 
-			local maxHeight = self.MaxVisible * OPTION_HEIGHT + 8
+			local maxHeight = self.MaxVisible * OPTION_HEIGHT + 6
 			local height = math.min(content, maxHeight)
 
 			self.List.CanvasSize = UDim2.new(0, 0, 0, content)
@@ -248,53 +264,35 @@ return function(UI)
 	function Dropdown:_paintOption(button, option)
 		local selected = self:_isSelected(option.Value)
 
-		button.BackgroundColor3 = selected and Theme.ElementActive or Theme.Element
-		button.TextColor3 = selected and Theme.Text or Theme.TextDim
-
-		local check = button:FindFirstChild("Check")
-		if check then
-			-- Emoji, so no TextColor3 tint: hidden outright when unselected.
-			check.Text = selected and Theme.Icons.Check or ""
+		button.BackgroundTransparency = 1
+		local label = button:FindFirstChild("Text")
+		if label then
+			-- Selected options light up in the accent, like the reference.
+			label.TextColor3 = selected and Theme.AccentSoft or Theme.TextDim
 		end
 	end
 
 	function Dropdown:_buildOption(option)
 		local button = Create.Button({
 			Name = option.Text,
-			BackgroundColor3 = Theme.Element,
+			BackgroundColor3 = Theme.ElementHover,
+			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			Size = UDim2.new(1, 0, 0, OPTION_HEIGHT),
 			Text = "",
-			TextColor3 = Theme.TextDim,
-			Font = Theme.Font,
-			TextSize = Theme.TextSize,
 			ZIndex = 3,
 			Parent = self.List,
 		})
-		Create.Corner(Theme.ElementCornerRadius, button)
 
 		Create.Label({
 			Name = "Text",
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1, -34, 1, 0),
-			Position = UDim2.new(0, 10, 0, 0),
+			Size = UDim2.new(1, -12, 1, 0),
+			Position = UDim2.new(0, 7, 0, 0),
 			Text = option.Text,
 			Font = Theme.Font,
 			TextSize = Theme.TextSize,
 			TextColor3 = Theme.TextDim,
-			ZIndex = 4,
-			Parent = button,
-		})
-
-		Create.Label({
-			Name = "Check",
-			BackgroundTransparency = 1,
-			Size = UDim2.new(0, 24, 1, 0),
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -4, 0, 0),
-			Text = "",
-			TextSize = 12,
-			TextXAlignment = Enum.TextXAlignment.Center,
 			ZIndex = 4,
 			Parent = button,
 		})
@@ -305,12 +303,12 @@ return function(UI)
 
 		table.insert(self.OptionConnections, button.MouseEnter:Connect(function()
 			if not self:_isSelected(option.Value) then
-				Tween.Fast(button, { BackgroundColor3 = Theme.ElementHover })
+				Tween.Fast(button, { BackgroundTransparency = 0 })
 			end
 		end))
 
 		table.insert(self.OptionConnections, button.MouseLeave:Connect(function()
-			self:_paintOption(button, option)
+			Tween.Fast(button, { BackgroundTransparency = 1 })
 		end))
 
 		table.insert(self.OptionConnections, button.MouseButton1Click:Connect(function()
@@ -358,24 +356,32 @@ return function(UI)
 
 	function Dropdown:_paintDisplay()
 		if self.Multi then
-			local count = 0
-			local first = nil
-			for key in pairs(self.Value) do
-				count = count + 1
-				if not first then
-					first = key
+			local names = {}
+			for i = 1, #self.Options do
+				if self.Value[tostring(self.Options[i].Value)] then
+					table.insert(names, self.Options[i].Text)
 				end
 			end
 
-			if count == 0 then
+			if #names == 0 then
 				self.ValueLabel.Text = "None"
-			elseif count == 1 then
-				self.ValueLabel.Text = tostring(first)
+			elseif #names <= 2 then
+				self.ValueLabel.Text = table.concat(names, ", ")
 			else
-				self.ValueLabel.Text = string.format("%d selected", count)
+				self.ValueLabel.Text = string.format("%d selected", #names)
 			end
 		else
-			self.ValueLabel.Text = self.Value ~= nil and tostring(self.Value) or "None"
+			local display = ""
+			if self.Value ~= nil then
+				display = tostring(self.Value)
+				for i = 1, #self.Options do
+					if self.Options[i].Value == self.Value then
+						display = self.Options[i].Text
+						break
+					end
+				end
+			end
+			self.ValueLabel.Text = display
 		end
 	end
 
@@ -411,7 +417,9 @@ return function(UI)
 
 		local children = self.List:GetChildren()
 		for i = 1, #children do
-			if children[i].ClassName ~= "UIListLayout" and children[i].ClassName ~= "UIPadding" then
+			if children[i].ClassName ~= "UIListLayout"
+				and children[i].ClassName ~= "UIPadding"
+				and children[i].ClassName ~= "UIStroke" then
 				children[i]:Destroy()
 			end
 		end

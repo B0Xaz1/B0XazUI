@@ -6,23 +6,30 @@ pre-authored ScreenGui. You hand it a config table, it builds the instance tree.
 It is a *library*, not a script: it creates frames, labels and buttons, wires up input,
 and hands you callbacks. It contains no game-specific behaviour of any kind.
 
+The default skin is **Abyss** — the skeet-inspired look the engine was designed for:
+square edges, one-pixel borders, tiny text, a blurple accent, sections whose title
+sits on their top border, and a two-column page layout:
+[`examples/Abyss.lua`](examples/Abyss.lua) recreates the original reference window
+element for element.
+
 ```
-┌────────────────────────────────────────┬───────┐
-│ B0XazUI  v1.0.0              [ – ] [ ✕ ]│ topbar│  draggable
-├────────────────────────────────────────┼───────┤
-│  Home   Visuals   Settings              │ tabs  │  horizontal tab bar
-├────────────────────────────────────────┴───────┤
-│ ┌────────────────────────────────────────────┐ │
-│ │ WELCOME                                 ▾  │ │  section
-│ │ A UI engine built out of Instances…        │ │  label
-│ ├────────────────────────────────────────────┤ │
-│ │ [              Say hello                 ] │ │  button
-│ ├────────────────────────────────────────────┤ │
-│ │ Enabled                            [ ●━━] │ │  toggle
-│ │ Walk speed                    42 studs     │ │  slider
-│ │ ━━━━━━━━━●────────────────────────────     │ │
-│ └────────────────────────────────────────────┘ │
-└────────────────────────────────────────────────┘
++---------------------------------------------------------------+
+| abyss dev access |  da hood                              -  x |  title strip
++---------------------------------------------------------------+
+| +-----+                                                       |
+| |main |  rage                                                 |  boxed tabs
++------+--------------------------------------------------------+
+|  legit ---------------------------  drawing field of view -----+----------------+
+| +--------------------------------+ +----------------------------+             |
+|   [x] aimbot                [ M2 ]   [x] aimbot fov        ======== swatch      |
+|   [ ] visible check                size                     value overlay      |
+|   [ ] apply prediction           +-------------------------------------------+ |
+|   smoothing [mouse]              |                 100/250                    | |
+| +--------------------------------+ +-------------------------------------------+ |
+| |                    0/20        |                                            | |
+| +--------------------------------+ +----------------------------+             |
++---------------------------------------------------------------+
+ ===============================================================   accent strip
 ```
 
 ---
@@ -60,7 +67,7 @@ B0XazUI/
 ├── init.lua                     ← entry point (this is what loadstring() fetches)
 ├── Core/                        ← the engine module tree
 │   ├── Env.lua                  executor detection: gethui / protect_gui / HTTP / task
-│   ├── Theme.lua                every colour, font and metric in one table
+│   ├── Theme.lua                every colour, font and metric in one table (the Abyss skin)
 │   ├── Library.lua              namespace assembly: ScreenGui, overlay, theme registry
 │   │
 │   ├── Util/
@@ -73,22 +80,24 @@ B0XazUI/
 │   │   └── Popup.lua            overlay-parented floating panels (no clipping)
 │   │
 │   ├── Components/
-│   │   ├── Window.lua           topbar + tab bar + content shell
-│   │   ├── Tab.lua              tab button + scrolling page
-│   │   ├── Section.lua          collapsible element group
+│   │   ├── Window.lua           title strip + tab bar + content shell + accent strip
+│   │   ├── Tab.lua              boxed tab button + scrolling page with N columns
+│   │   ├── Section.lua          fieldset box whose title sits on its top border
 │   │   └── Notification.lua     stacked toasts
 │   │
 │   └── Elements/
 │       ├── Label.lua
-│       ├── Button.lua           with material-style ripple
-│       ├── Toggle.lua
-│       ├── Slider.lua           drag + click-on-track, min/max/step
-│       ├── Dropdown.lua         single & multi select, expands inline
-│       ├── Textbox.lua          optional numeric filtering + max length
-│       ├── Keybind.lua          key capture + hotkey firing
-│       └── ColorPicker.lua      HSV field, hue strip, editable hex
+│       ├── Button.lua           flat bordered box
+│       ├── Toggle.lua           accenting checkbox, optional key chip + colour swatch
+│       ├── Slider.lua           bordered bar with the value/max reading on it
+│       ├── Dropdown.lua         label + bordered box ("+"), expands inline
+│       ├── Textbox.lua          label + full-width inset box, numeric filter option
+│       ├── Keybind.lua          key chip: capture + hotkey firing
+│       └── ColorPicker.lua      swatch block; popup with HSV field, hue strip, hex
 │
 ├── examples/Demo.lua            every element, wired up
+├── examples/Abyss.lua           the original reference window, element for element
+├── preview/                     ← browser render of the live instance tree
 └── tests/                       mocked-Roblox harness (see below)
 ```
 
@@ -153,7 +162,8 @@ Config: `Title`, `SubTitle`, `Size` (Vector2), `Position` (UDim2, defaults to ce
 
 | Member | Notes |
 |---|---|
-| `Tab:AddSection(title, config)` | `config.Collapsed = true` starts collapsed |
+| `Window:AddTab(name, config)` | `config.Columns` — page columns (default `2`); use `1` for a single stack |
+| `Tab:AddSection(title, config)` | `config.Column` — which column the section lands in (default `1`); `config.Collapsed = true` starts collapsed |
 | `Tab:GetSection(title)`, `Tab:SetName(name)`, `Tab:Clear()`, `Tab:Destroy()` | |
 | `Section:Add<Element>(config)` | One per element type |
 | `Section:Add("Toggle", config)` | Same thing, by name |
@@ -169,12 +179,12 @@ Every element returns an object with `:SetValue(v, skipCallback)`, `:GetValue()`
 |---|---|
 | **Label** | `Text`, `Style` (`Text`·`Dim`·`Faint`·`Accent`), `Bold`, `RichText`, `Wrapped`, `Align` |
 | **Button** | `Name`, `Callback`, `Detail`, `Height`, `Disabled` · `:Fire()` |
-| **Toggle** | `Name`, `Default`, `Callback` · `:Toggle()` |
-| **Slider** | `Name`, `Min`, `Max`, `Default`, `Step`, `Suffix`, `Callback` · `:SetRange(min, max)` |
-| **Dropdown** | `Name`, `Options`, `Default`, `Multi`, `MaxVisible`, `Callback` · `:SetOptions()`, `:AddOption()`, `:RemoveOption()`, `:SetOpen()` |
+| **Toggle** | `Name`, `Default`, `Callback` · `:Toggle()` — plus `Bind` (KeyCode/UserInputType) to draw the `[ M2 ]` key chip: click to rebind, Escape clears, the key toggles the toggle. And `Swatch = { Default, Callback }` to embed a colour swatch |
+| **Slider** | `Name`, `Min`, `Max`, `Default`, `Step`, `Suffix`, `Callback` · reads `value/max` centred on the bar · `:SetRange(min, max)` |
+| **Dropdown** | `Name`, `Options`, `Default`, `Multi`, `MaxVisible`, `Callback` · selection shown inside the box, `+` opens the inline list · `:SetOptions()`, `:AddOption()`, `:RemoveOption()`, `:SetOpen()` |
 | **Textbox** | `Name`, `Default`, `Placeholder`, `Numeric`, `MaxLength`, `ClearOnFocus`, `Callback(text, enterPressed)` · `:GetNumber()` |
-| **Keybind** | `Name`, `Default` (KeyCode), `Callback` · `:StartListening()`, `:SetKey()`, `:GetName()`, `:Matches(input)` |
-| **ColorPicker** | `Name`, `Default` (Color3), `Callback` · `:SetOpen()` |
+| **Keybind** | `Name`, `Default` (KeyCode), `Callback` · chip on the right, click to listen · `:StartListening()`, `:SetKey()`, `:GetName()`, `:Matches(input)` |
+| **ColorPicker** | `Name`, `Default` (Color3), `Callback` · swatch + popup · `ColorPicker.NewSwatch(container, { Position, Default, Callback })` for embedding |
 
 Options may be plain strings or `{ Text = "Fast", Value = 1 }` tables.
 
@@ -191,6 +201,7 @@ UI:SetTheme({
     Accent     = Color3.fromRGB(255, 90, 90),
     Background = Color3.fromRGB(14, 14, 18),
     Text       = Color3.fromRGB(235, 235, 245),
+    Font       = Enum.Font.Gotham, -- trade the tiny mono face back in
 })
 ```
 
@@ -213,21 +224,19 @@ picker's gradients are `UIGradient`s. Nothing to download, nothing to break.
 
 ### Icons
 
-Every icon the engine draws lives in `Theme.Icons` and is an **emoji**:
+Window chrome and disclosure glyphs are **plain ASCII** — `-`, `+`, `x` — so every
+font Roblox ships renders them, and they are exactly what the original design uses.
+Only the four notification-type icons are **emoji**, drawn in colour by the platform
+emoji font (desktop and mobile alike) on a tinted backdrop, since `TextColor3`
+cannot tint an emoji:
 
 ```lua
 UI:SetTheme({ Icons = { Success = "\u{2705}", Close = "\u{2716}\u{FE0F}" } })
 ```
 
-Roblox renders its UI in the Gotham family, which has no glyph for most of the
-symbol blocks — dingbats (`\u{2713}` `\u{2715}`), geometric shapes (`\u{25BE}`
-`\u{25B8}`) and box drawing all come back as an empty box. Emoji fall back to the
-platform emoji font and render on desktop and mobile alike, so that is what the
-engine uses.
-
-The trade-off is that emoji are drawn **in colour**, so `TextColor3` does not tint
-them. Where a status colour still has to read — a notification type, say — the emoji
-sits on a tinted backdrop instead of relying on the glyph's own colour.
+Roblox renders its UI text without glyphs for most symbol blocks — dingbats
+(`\u{2713}` `\u{2715}`), geometric shapes (`\u{25BE}` `\u{25B8}`) and box drawing all
+come back as an empty box. Sticking to ASCII + emoji keeps every glyph honest.
 
 `tests/spec.lua` walks the live instance tree and fails the build if any rendered
 string contains a non-ASCII character that did not come out of `Theme.Icons`, so a
@@ -246,14 +255,28 @@ cd tests && npm install     # installs wasmoon (Lua 5.4 in WASM)
 cd .. && node tests/run.js
 ```
 
-Two phases run, each in a fresh Lua VM:
+Three phases run, each in a fresh Lua VM:
 
 1. **`examples/Demo.lua`** — proves the documented API works end to end.
-2. **`tests/spec.lua`** — 67 assertions over loading, the window shell, every element's
-   input handling, notification layout, icons, theming, tree integrity and teardown.
+2. **`examples/Abyss.lua`** — the reference-window recreation builds cleanly.
+3. **`tests/spec.lua`** — 71 assertions over loading, the window shell, columns,
+   every element's input handling, chips and swatches, notification layout, icons,
+   theming, tree integrity and teardown.
 
 ```
-67 passed, 0 failed
+71 passed, 0 failed
+```
+
+### Seeing it without Roblox
+
+The same mocked client can dump the built instance tree to JSON and render it in a
+browser with the exact layout maths the engine uses:
+
+```bash
+node tests/preview.js    # writes preview/data.json + data.js from examples/Abyss.lua
+# then either serve the folder...
+python3 -m http.server -d preview
+# ...or just open preview/index.html directly — data.js makes file:// work too
 ```
 
 ---

@@ -1,10 +1,12 @@
 --[[
 	Core/Elements/Button.lua
 	====================================================================
-	A clickable row with a material-style ripple.
+	A clickable box -- the same silhouette as the dropdown/trigger
+	boxes, one-pixel outline and all. Pressing it dips the fill; there
+	is no ripple, the original design is quiet.
 
 		Section:AddButton({
-			Name     = "Do the thing",
+			Name     = "save config",
 			Callback = function() print("clicked") end,
 		})
 
@@ -16,7 +18,6 @@ return function(UI)
 	local Theme = UI.Theme
 	local Create = UI.Util.Create
 	local Tween = UI.Util.Tween
-	local Env = UI.Env
 
 	local Button = {}
 	Button.__index = Button
@@ -51,11 +52,14 @@ return function(UI)
 			Size = UDim2.new(1, 0, 1, 0),
 			Text = "",
 			ZIndex = 2,
-			ClipsDescendants = true,
 			Parent = Frame,
 		})
-		Create.Corner(Theme.ElementCornerRadius, HitArea)
+		if Theme.ElementCornerRadius > 0 then
+			Create.Corner(Theme.ElementCornerRadius, HitArea)
+		end
 		UI:BindTheme(HitArea, "BackgroundColor3", "Element")
+		local stroke = Create.Stroke(Theme.StrokeSoft, 1, HitArea)
+		UI:BindTheme(stroke, "Color", "StrokeSoft")
 
 		local TextLabel = Create.Label({
 			Name = "Text",
@@ -63,14 +67,14 @@ return function(UI)
 			Size = UDim2.new(1, -20, 1, 0),
 			Position = UDim2.new(0, 10, 0, 0),
 			Text = self.Name,
-			Font = Theme.FontMedium,
+			Font = Theme.Font,
 			TextSize = Theme.TextSize,
-			TextColor3 = Theme.Text,
+			TextColor3 = Theme.TextDim,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			ZIndex = 3,
 			Parent = HitArea,
 		})
-		UI:BindTheme(TextLabel, "TextColor3", "Text")
+		UI:BindTheme(TextLabel, "TextColor3", "TextDim")
 
 		-- Right-aligned optional detail text (e.g. a key name or count).
 		if config.Detail then
@@ -84,7 +88,7 @@ return function(UI)
 				Text = tostring(config.Detail),
 				Font = Theme.Font,
 				TextSize = Theme.SmallTextSize,
-				TextColor3 = Theme.TextDim,
+				TextColor3 = Theme.TextFaint,
 				TextXAlignment = Enum.TextXAlignment.Right,
 				ZIndex = 3,
 				Parent = HitArea,
@@ -94,6 +98,7 @@ return function(UI)
 		self.Frame = Frame
 		self.HitArea = HitArea
 		self.TextLabel = TextLabel
+		self.Stroke = stroke
 
 		------------------------------------------------------------------
 		-- Interaction
@@ -103,6 +108,8 @@ return function(UI)
 				return
 			end
 			Tween.Fast(HitArea, { BackgroundColor3 = Theme.ElementHover })
+			Tween.Fast(TextLabel, { TextColor3 = Theme.Text })
+			Tween.Fast(stroke, { Color = Theme.Stroke })
 		end))
 
 		self.Bin:Add(HitArea.MouseLeave:Connect(function()
@@ -110,6 +117,8 @@ return function(UI)
 				return
 			end
 			Tween.Fast(HitArea, { BackgroundColor3 = Theme.Element })
+			Tween.Fast(TextLabel, { TextColor3 = Theme.TextDim })
+			Tween.Fast(stroke, { Color = Theme.StrokeSoft })
 		end))
 
 		self.Bin:Add(HitArea.MouseButton1Down:Connect(function()
@@ -126,16 +135,6 @@ return function(UI)
 			Tween.Fast(HitArea, { BackgroundColor3 = Theme.ElementHover })
 		end))
 
-		self.Bin:Add(HitArea.InputBegan:Connect(function(input)
-			if self.Disabled then
-				return
-			end
-			if not Env.IsPrimaryInput(input) then
-				return
-			end
-			self:_ripple(input.Position)
-		end))
-
 		self.Bin:Add(HitArea.MouseButton1Click:Connect(function()
 			self:Fire()
 		end))
@@ -145,50 +144,6 @@ return function(UI)
 	end
 
 	Button.new = Button.New
-
-	----------------------------------------------------------------------
-	-- Ripple
-	----------------------------------------------------------------------
-
-	function Button:_ripple(inputPosition)
-		if typeof(self.HitArea) ~= "Instance" then
-			return
-		end
-
-		local absolute = self.HitArea.AbsolutePosition
-		local size = self.HitArea.AbsoluteSize
-
-		local x = 0
-		local y = 0
-		if typeof(inputPosition) == "Vector2" or typeof(inputPosition) == "Vector3" then
-			x = inputPosition.X - absolute.X
-			y = inputPosition.Y - absolute.Y
-		else
-			x = size.X / 2
-			y = size.Y / 2
-		end
-
-		local ripple = Create("Frame", {
-			Name = "Ripple",
-			BackgroundColor3 = Theme.Text,
-			BackgroundTransparency = 0.85,
-			BorderSizePixel = 0,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0, x, 0, y),
-			Size = UDim2.new(0, 0, 0, 0),
-			ZIndex = 3,
-			Parent = self.HitArea,
-		})
-		Create.Corner(UDim.new(1, 0), ripple)
-
-		local target = math.max(size.X, size.Y) * 2.2
-		Tween.Play(ripple, Tween.Info(0.45), {
-			Size = UDim2.new(0, target, 0, target),
-			BackgroundTransparency = 1,
-		}, function()
-			ripple:Destroy()
-		end)
-	end
 
 	----------------------------------------------------------------------
 	-- API
@@ -218,11 +173,9 @@ return function(UI)
 
 	function Button:SetDisabled(disabled)
 		self.Disabled = disabled and true or false
-		Tween.Fast(self.HitArea, {
-			BackgroundColor3 = self.Disabled and Theme.Element or Theme.Element,
-		})
+		Tween.Fast(self.HitArea, { BackgroundColor3 = Theme.Element })
 		Tween.Fast(self.TextLabel, {
-			TextColor3 = self.Disabled and Theme.TextFaint or Theme.Text,
+			TextColor3 = self.Disabled and Theme.TextFaint or Theme.TextDim,
 		})
 	end
 

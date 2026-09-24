@@ -1,7 +1,8 @@
 --[[
 	Core/Elements/ColorPicker.lua
 	====================================================================
-	HSV colour picker. Clicking the swatch opens a floating panel on
+	HSV colour picker. The row is just a dim label and a solid swatch
+	block on the right; clicking the swatch opens a floating panel on
 	the overlay (so the page's ScrollingFrame cannot clip it):
 
 		+---------------------------+
@@ -12,11 +13,15 @@
 		+---------------------------+
 		|  hue  ----------------o---|   drag
 		+---------------------------+
-		|          A1B2C3           |   editable hex
+		|          a1b2c3           |   editable hex
 		+---------------------------+
 
 	No image assets are used -- the gradients are pure UIGradients, so
 	this works offline and on any executor.
+
+	The swatch + popup are also exported as ColorPicker.NewSwatch, so
+	other elements (the toggle's config.Swatch) can embed the same
+	control without growing a row of their own.
 	====================================================================
 ]]
 
@@ -99,31 +104,44 @@ return function(UI)
 		end))
 	end
 
+	----------------------------------------------------------------------
+	-- Shared construction
+	----------------------------------------------------------------------
+
+	--- Initialises the picker state + swatch button on `self` and wires
+	-- the click-to-open popup. Used by both constructors below.
+	local function initialise(self, default, callback)
+		if typeof(default) ~= "Color3" then
+			default = Theme.Accent
+		end
+
+		self.UI = UI
+		self.Type = "ColorPicker"
+		self.Callback = callback
+		self.Bin = UI.Util.Bin.new()
+		self.Changed = UI.Util.Signal.new()
+
+		local h, s, v = Color.ToHSV(default)
+		self.H, self.S, self.V = h * 360, s, v
+		self.Value = default
+		self.Popup = nil -- built lazily on first open
+
+		self.Bin:Add(self.SwatchButton.MouseButton1Click:Connect(function()
+			self:_togglePopup()
+		end))
+
+		self:_paintField()
+	end
+
+	--- The full row element: label on the left, swatch on the right.
 	function ColorPicker.New(section, config)
 		config = config or {}
 
 		local self = setmetatable({}, ColorPicker)
 
-		self.UI = UI
 		self.Section = section
 		self.Name = config.Name or config.Title or "Color"
-		self.Type = "ColorPicker"
-		self.Callback = config.Callback
-		self.Bin = UI.Util.Bin.new()
-		self.Changed = UI.Util.Signal.new()
 
-		local default = config.Default
-		if typeof(default) ~= "Color3" then
-			default = Theme.Accent
-		end
-
-		local h, s, v = Color.ToHSV(default)
-		self.H, self.S, self.V = h * 360, s, v
-		self.Value = default
-
-		------------------------------------------------------------------
-		-- Row:  [ name ]        [ hex ]  [ swatch ]
-		------------------------------------------------------------------
 		local height = config.Height or Theme.ElementHeight
 
 		local Frame = Create("Frame", {
@@ -137,58 +155,63 @@ return function(UI)
 		local TextLabel = Create.Label({
 			Name = "Text",
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1, -120, 1, 0),
-			Position = UDim2.new(0, 2, 0, 0),
+			Size = UDim2.new(1, -(Theme.SwatchWidth + 14), 1, 0),
+			Position = UDim2.new(0, 0, 0, 0),
 			Text = self.Name,
-			Font = Theme.FontMedium,
+			Font = Theme.Font,
 			TextSize = Theme.TextSize,
-			TextColor3 = Theme.Text,
+			TextColor3 = Theme.TextDim,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 2,
 			Parent = Frame,
 		})
-		UI:BindTheme(TextLabel, "TextColor3", "Text")
+		UI:BindTheme(TextLabel, "TextColor3", "TextDim")
 
-		local HexLabel = Create.Label({
-			Name = "Hex",
-			BackgroundTransparency = 1,
-			Size = UDim2.new(0, 54, 1, 0),
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -54, 0, 0),
-			Text = Color.ToHex(self.Value),
-			Font = Theme.FontMono or Theme.Font,
-			TextSize = Theme.SmallTextSize,
-			TextColor3 = Theme.TextDim,
-			TextXAlignment = Enum.TextXAlignment.Right,
-			ZIndex = 2,
-			Parent = Frame,
-		})
-
-		local SwatchButton = Create.Button({
+		self.SwatchButton = Create.Button({
 			Name = "Swatch",
-			BackgroundColor3 = self.Value,
+			BackgroundColor3 = Theme.Accent,
 			BorderSizePixel = 0,
-			Size = UDim2.new(0, 44, 0, 20),
+			Size = UDim2.new(0, Theme.SwatchWidth, 0, Theme.SwatchHeight),
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, 0, 0.5, 0),
 			Text = "",
 			ZIndex = 2,
 			Parent = Frame,
 		})
-		Create.Corner(4, SwatchButton)
-		Create.Stroke(Theme.Stroke, 1, SwatchButton)
+		Create.Stroke(Theme.StrokeSoft, 1, self.SwatchButton)
 
 		self.Frame = Frame
 		self.TextLabel = TextLabel
-		self.HexLabel = HexLabel
-		self.SwatchButton = SwatchButton
 
-		self.Bin:Add(SwatchButton.MouseButton1Click:Connect(function()
-			self:_togglePopup()
-		end))
+		initialise(self, config.Default, config.Callback)
 
-		self.Popup = nil -- built lazily on first open
 		section:AddElement(Frame, self)
+		return self
+	end
+
+	--- Bare swatch + popup for embedding into other elements' rows.
+	-- @param container Instance    the row frame to draw inside
+	-- @param config    table       { Position (UDim2), Default, Callback }
+	function ColorPicker.NewSwatch(container, config)
+		config = config or {}
+
+		local self = setmetatable({}, ColorPicker)
+
+		self.SwatchButton = Create.Button({
+			Name = "Swatch",
+			BackgroundColor3 = Theme.Accent,
+			BorderSizePixel = 0,
+			Size = UDim2.new(0, Theme.SwatchWidth, 0, Theme.SwatchHeight),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = config.Position or UDim2.new(1, -Theme.SwatchWidth, 0.5, 0),
+			Text = "",
+			ZIndex = 5,
+			Parent = container,
+		})
+		Create.Stroke(Theme.StrokeSoft, 1, self.SwatchButton)
+
+		self.Frame = self.SwatchButton -- Destroy() target
+		initialise(self, config.Default, config.Callback)
 		return self
 	end
 
@@ -225,7 +248,6 @@ return function(UI)
 			ZIndex = 201,
 			Parent = panel,
 		})
-		Create.Corner(6, Field)
 		Create.Stroke(Theme.Stroke, 1, Field)
 
 		-- White overlay, opaque on the left -> transparent on the right.
@@ -238,7 +260,6 @@ return function(UI)
 			ZIndex = 202,
 			Parent = Field,
 		})
-		Create.Corner(6, Saturation)
 		Create.New("UIGradient", {
 			Rotation = 0,
 			Color = ColorSequence.new({
@@ -263,7 +284,6 @@ return function(UI)
 			ZIndex = 203,
 			Parent = Field,
 		})
-		Create.Corner(6, Value)
 		Create.New("UIGradient", {
 			Rotation = 90,
 			Color = ColorSequence.new({
@@ -303,7 +323,6 @@ return function(UI)
 			ZIndex = 201,
 			Parent = panel,
 		})
-		Create.Corner(6, Hue)
 		Create.Stroke(Theme.Stroke, 1, Hue)
 		Create.New("UIGradient", {
 			Rotation = 0,
@@ -315,13 +334,12 @@ return function(UI)
 			Name = "Cursor",
 			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 			BorderSizePixel = 0,
-			Size = UDim2.new(0, 4, 0, HUE_HEIGHT + 6),
+			Size = UDim2.new(0, 4, 0, HUE_HEIGHT + 4),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.new(0, 0, 0.5, 0),
 			ZIndex = 202,
 			Parent = Hue,
 		})
-		Create.Corner(2, HueCursor)
 		Create.Stroke(Color3.fromRGB(0, 0, 0), 1, HueCursor)
 
 		------------------------------------------------------------------
@@ -333,10 +351,10 @@ return function(UI)
 			Name = "HexBox",
 			BackgroundColor3 = Theme.Input,
 			BorderSizePixel = 0,
-			Size = UDim2.new(0, contentWidth, 0, 24),
+			Size = UDim2.new(0, contentWidth, 0, 22),
 			Position = UDim2.new(0, inset, 0, hexY),
 			Text = Color.ToHex(self.Value),
-			PlaceholderText = "RRGGBB",
+			PlaceholderText = "rrggbb",
 			PlaceholderColor3 = Theme.TextFaint,
 			Font = Theme.FontMono or Theme.Font,
 			TextSize = Theme.SmallTextSize + 1,
@@ -346,12 +364,11 @@ return function(UI)
 			ZIndex = 201,
 			Parent = panel,
 		})
-		Create.Corner(6, HexBox)
+		Create.Stroke(Theme.StrokeSoft, 1, HexBox)
 		UI:BindTheme(HexBox, "BackgroundColor3", "Input")
 
 		self.Field = Field
 		self.FieldCursor = FieldCursor
-		self.Hue = Hue -- shadowing risk: hue NUMBER vs hue FRAME!
 		self.HueFrame = Hue
 		self.HueCursor = HueCursor
 		self.HexBox = HexBox
@@ -414,7 +431,6 @@ return function(UI)
 		local color = self.Value
 
 		self.SwatchButton.BackgroundColor3 = color
-		self.HexLabel.Text = Color.ToHex(color)
 
 		if not self.Popup then
 			return
@@ -437,7 +453,7 @@ return function(UI)
 		if typeof(self.Callback) == "function" then
 			local ok, err = pcall(self.Callback, self.Value, self)
 			if not ok then
-				warn(string.format("[B0XazUI] ColorPicker %q callback error: %s", self.Name, tostring(err)))
+				warn(string.format("[B0XazUI] ColorPicker %q callback error: %s", tostring(self.Name), tostring(err)))
 			end
 		end
 		self.Changed:Fire(self.Value, self)
@@ -480,8 +496,12 @@ return function(UI)
 
 	function ColorPicker:SetText(text)
 		self.Name = tostring(text or "")
-		self.TextLabel.Text = self.Name
-		self.Frame.Name = self.Name
+		if self.TextLabel then
+			self.TextLabel.Text = self.Name
+		end
+		if self.Frame and self.Frame ~= self.SwatchButton then
+			self.Frame.Name = self.Name
+		end
 	end
 
 	function ColorPicker:SetCallback(callback)
@@ -489,7 +509,9 @@ return function(UI)
 	end
 
 	function ColorPicker:SetVisible(visible)
-		self.Frame.Visible = visible and true or false
+		if self.Frame then
+			self.Frame.Visible = visible and true or false
+		end
 	end
 
 	function ColorPicker:Destroy()
@@ -501,7 +523,15 @@ return function(UI)
 		self.Changed:Destroy()
 		self.Bin:Clean()
 		UI:UnbindTheme(self.Frame)
-		self.Frame:Destroy()
+
+		-- Embedded swatches destroy their own button; row elements leave
+		-- row teardown to the row frame.
+		if self.Frame then
+			if self.Frame == self.SwatchButton or self.Section ~= nil then
+				self.Frame:Destroy()
+			end
+			self.Frame = nil
+		end
 	end
 
 	UI.Elements.ColorPicker = ColorPicker

@@ -83,7 +83,7 @@ local UI
 describe("loader", function()
 	it("returns a namespace table", function()
 		expect(typeof(B0XazUI) == "table", "init.lua should return a table")
-		eq(B0XazUI.Version, "1.0.0", "version")
+		eq(B0XazUI.Version, "1.1.0", "version")
 	end)
 
 	it("loads every module in the manifest", function()
@@ -147,7 +147,7 @@ describe("window", function()
 		expect(Window.TabBar ~= nil, "tabbar missing")
 		expect(Window.Content ~= nil, "content missing")
 		eq(Window.TitleLabel.Text, "Test Window", "title")
-		eq(Window.SubTitleLabel.Text, "v1.0.0", "subtitle")
+		eq(Window.SubTitleLabel.Text, "|  v1.0.0", "subtitle gains its pipe")
 		eq(Window.Root.Size.X.Offset, 600, "width")
 		eq(Window.Root.Size.Y.Offset, 400, "height")
 	end)
@@ -204,12 +204,17 @@ end)
 ----------------------------------------------------------------------
 
 describe("section", function()
-	it("creates a collapsible section", function()
+	it("creates a collapsible section in the first column", function()
 		Section = Tab:AddSection("General")
 		expect(Section ~= nil, "section is nil")
-		eq(Section.Frame.Parent, Tab.Page, "section parent")
+		eq(Section.Frame.Parent, Tab.Columns[1], "section lands in column one")
 		eq(Section.HeaderLabel.Text, "General", "section title")
 		eq(Section.Body.Visible, true, "expanded by default")
+	end)
+
+	it("places sections in the chosen column", function()
+		local right = Tab:AddSection("Elsewhere", { Column = 2 })
+		eq(right.Frame.Parent, Tab.Columns[2], "section lands in column two")
 	end)
 
 	it("collapses on header click", function()
@@ -283,7 +288,8 @@ describe("Toggle", function()
 		eq(toggle:GetValue(), true, "toggled on")
 		eq(#received, 1, "callback fired")
 		eq(received[1], true, "callback value")
-		eq(toggle.Switch.BackgroundColor3, UI.Theme.Accent, "switch accent when on")
+		eq(toggle.Checkbox.BackgroundColor3, UI.Theme.ToggleKnob, "checkbox fills when on")
+		eq(toggle.TextLabel.TextColor3, UI.Theme.AccentSoft, "label lights up when on")
 	end)
 
 	it("toggles back off", function()
@@ -309,6 +315,45 @@ describe("Toggle", function()
 		toggle:SetValue(true)
 		eq(seen, 1, "changed fired")
 	end)
+
+	it("shows its key chip and toggles from the bound key", function()
+		local bound = Section:AddToggle({ Name = "Aimbot", Bind = Enum.UserInputType.MouseButton2 })
+		eq(bound.Chip.Visible, true, "chip visible while bound")
+		eq(bound.Chip.Text, "M2", "mouse button short name")
+
+		Mock.inputBegan({ UserInputType = Enum.UserInputType.MouseButton2 })
+		eq(bound:GetValue(), true, "bound key toggles")
+	end)
+
+	it("captures a key from the chip and clears it with Escape", function()
+		local chip = Section:AddToggle({ Name = "Chip", Bind = Enum.KeyCode.G })
+		Mock.click(chip.Chip)
+		Mock.inputBegan({ KeyCode = Enum.KeyCode.H, UserInputType = Enum.UserInputType.Keyboard })
+		eq(chip:GetBind(), Enum.KeyCode.H, "captured key shows on chip")
+
+		Mock.click(chip.Chip)
+		Mock.inputBegan({ KeyCode = Enum.KeyCode.Escape, UserInputType = Enum.UserInputType.Keyboard })
+		eq(chip.Chip.Visible, false, "chip hides once unbound")
+	end)
+
+	it("embeds a colour swatch when asked", function()
+		local seen = {}
+		local swatched = Section:AddToggle({
+			Name = "Coloured",
+			Swatch = {
+				Default = Color3.fromRGB(224, 84, 128),
+				Callback = function(color)
+					table.insert(seen, color)
+				end,
+			},
+		})
+
+		expect(swatched.SwatchPicker ~= nil, "swatch embedded")
+		eq(swatched.SwatchPicker.SwatchButton.BackgroundColor3, Color3.fromRGB(224, 84, 128), "swatch colour")
+
+		swatched.SwatchPicker:SetValue(Color3.fromRGB(1, 2, 3))
+		eq(#seen, 1, "swatch callback fired")
+	end)
 end)
 
 describe("Slider", function()
@@ -329,7 +374,7 @@ describe("Slider", function()
 		})
 
 		eq(slider:GetValue(), 25, "default")
-		eq(slider.ValueLabel.Text, "25%", "formatted value")
+		eq(slider.ValueLabel.Text, "25%/100%", "values read value/max on the bar")
 	end)
 
 	it("responds to a click on the track", function()
@@ -371,7 +416,7 @@ describe("Slider", function()
 		eq(slider:GetValue(), 0, "clamped to min")
 
 		local precise = Section:AddSlider({ Name = "Precise", Min = 0, Max = 1, Step = 0.1, Default = 0.3 })
-		eq(precise.ValueLabel.Text, "0.3", "one decimal place")
+		eq(precise.ValueLabel.Text, "0.3/1", "one decimal place")
 	end)
 end)
 
@@ -553,10 +598,10 @@ describe("ColorPicker", function()
 			end,
 		})
 
-		eq(picker.HexLabel.Text, "FF0000", "initial hex")
 		eq(picker.SwatchButton.BackgroundColor3, Color3.fromRGB(255, 0, 0), "swatch colour")
 
 		picker:SetOpen(true)
+		eq(picker.HexBox.Text, "FF0000", "initial hex")
 		expect(picker.Popup ~= nil, "popup missing")
 		eq(picker.Popup.Open, true, "popup open")
 		eq(picker.Popup.Frame.Visible, true, "popup visible")
@@ -594,7 +639,6 @@ describe("ColorPicker", function()
 		picker.HexBox.Text = "0080FF"
 		picker.HexBox.FocusLost:Fire(true)
 
-		eq(picker.HexLabel.Text, "0080FF", "hex label")
 		eq(picker:GetValue(), Color3.fromRGB(0, 128, 255), "value")
 		eq(picker.SwatchButton.BackgroundColor3, Color3.fromRGB(0, 128, 255), "swatch")
 	end)
@@ -603,7 +647,8 @@ describe("ColorPicker", function()
 		local before = #picked
 		picker:SetValue(Color3.fromRGB(10, 20, 30), true)
 		eq(#picked, before, "silent")
-		eq(picker.HexLabel.Text, "0A141E", "repainted")
+		eq(picker.SwatchButton.BackgroundColor3, Color3.fromRGB(10, 20, 30), "swatch repainted")
+		eq(picker.HexBox.Text, "0A141E", "hex box repainted")
 	end)
 
 	it("closes the popup", function()
@@ -903,12 +948,12 @@ end)
 describe("theming", function()
 	it("repaints bound properties", function()
 		local slider = Section:AddSlider({ Name = "Themed", Min = 0, Max = 10, Default = 1 })
-		local old = slider.ValueLabel.TextColor3
+		local old = slider.Fill.BackgroundColor3
 
 		UI:SetTheme({ Accent = Color3.fromRGB(255, 0, 255) })
 
-		eq(slider.ValueLabel.TextColor3, Color3.fromRGB(255, 0, 255), "accent applied")
-		expect(old ~= slider.ValueLabel.TextColor3, "colour actually changed")
+		eq(slider.Fill.BackgroundColor3, Color3.fromRGB(255, 0, 255), "accent applied")
+		expect(old ~= slider.Fill.BackgroundColor3, "colour actually changed")
 	end)
 
 	it("rebinds a single property", function()
@@ -928,7 +973,7 @@ describe("tree integrity", function()
 		local total = Mock.countAll(root)
 		expect(total > 100, string.format("expected a populated tree, got %d instances", total))
 
-		expect(Mock.countClass(root, "UICorner") > 5, "rounded corners present")
+		expect(Mock.countClass(root, "UIStroke") > 5, "one-pixel borders present")
 		expect(Mock.countClass(root, "UIListLayout") > 3, "layouts present")
 		expect(Mock.countClass(root, "ScrollingFrame") >= 4, "scrolling frames present")
 	end)

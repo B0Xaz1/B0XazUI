@@ -1,12 +1,14 @@
 --[[
 	Core/Elements/Textbox.lua
 	====================================================================
-	Single-line text input.
+	Single-line text input, in the same shape the dropdown uses: a
+	small dim label above a full-width inset box. The border lights
+	up while typing.
 
 		Section:AddTextbox({
-			Name        = "Player",
+			Name        = "player name",
 			Default     = "",
-			Placeholder = "username",
+			Placeholder = "who?",
 			Numeric     = false,    -- digits and one decimal point only
 			MaxLength   = 32,
 			ClearOnFocus = false,
@@ -45,7 +47,7 @@ return function(UI)
 
 		self.Value = tostring(config.Default or config.Text or "")
 
-		local height = config.Height or Theme.ElementHeight
+		local height = config.Height or (Theme.LabelRowHeight + 3 + Theme.BoxHeight)
 
 		local Frame = Create("Frame", {
 			Name = self.Name,
@@ -58,25 +60,24 @@ return function(UI)
 		local TextLabel = Create.Label({
 			Name = "Text",
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1, -(config.InputWidth or 150) - 20, 1, 0),
-			Position = UDim2.new(0, 2, 0, 0),
+			Size = UDim2.new(1, 0, 0, Theme.LabelRowHeight),
+			Position = UDim2.new(0, 0, 0, 0),
 			Text = self.Name,
-			Font = Theme.FontMedium,
+			Font = Theme.Font,
 			TextSize = Theme.TextSize,
-			TextColor3 = Theme.Text,
+			TextColor3 = Theme.TextDim,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 2,
 			Parent = Frame,
 		})
-		UI:BindTheme(TextLabel, "TextColor3", "Text")
+		UI:BindTheme(TextLabel, "TextColor3", "TextDim")
 
 		local Input = Create("TextBox", {
 			Name = "Input",
 			BackgroundColor3 = Theme.Input,
 			BorderSizePixel = 0,
-			Size = UDim2.new(0, config.InputWidth or 150, 1, 0),
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, 0, 0, 0),
+			Size = UDim2.new(1, 0, 0, Theme.BoxHeight),
+			Position = UDim2.new(0, 0, 0, Theme.LabelRowHeight + 3),
 			Text = self.Value,
 			PlaceholderText = config.Placeholder or "",
 			PlaceholderColor3 = Theme.TextFaint,
@@ -89,11 +90,9 @@ return function(UI)
 			ZIndex = 2,
 			Parent = Frame,
 		})
-		Create.Corner(Theme.ElementCornerRadius, Input)
-		Create.Padding(8, 8, 0, 0, Input)
-		local stroke = Create.Stroke(Theme.StrokeSoft, 1, Input, 1)
+		Create.Padding(7, 7, 0, 0, Input)
+		local stroke = Create.Stroke(Theme.StrokeSoft, 1, Input)
 		UI:BindTheme(Input, "BackgroundColor3", "Input")
-		UI:BindTheme(stroke, "Color", "StrokeSoft")
 
 		self.Frame = Frame
 		self.TextLabel = TextLabel
@@ -104,17 +103,14 @@ return function(UI)
 		-- Interaction
 		------------------------------------------------------------------
 		self.Bin:Add(Input.Focused:Connect(function()
-			Tween.Fast(stroke, { Transparency = 0 })
-			Tween.Fast(Input, { BackgroundColor3 = Theme.ElementActive })
-
+			Tween.Fast(stroke, { Color = Theme.Stroke })
 			if self.ClearOnFocus then
 				Input.Text = ""
 			end
 		end))
 
 		self.Bin:Add(Input.FocusLost:Connect(function(enterPressed)
-			Tween.Fast(stroke, { Transparency = 1 })
-			Tween.Fast(Input, { BackgroundColor3 = Theme.Input })
+			Tween.Fast(stroke, { Color = Theme.StrokeSoft })
 
 			self:_commit(enterPressed)
 
