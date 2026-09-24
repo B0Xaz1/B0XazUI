@@ -172,11 +172,11 @@ return function(UI)
 		})
 		Create.Row(6, Controls)
 
-		self.MinimizeButton = self:_controlButton(Controls, "–", function()
+		self.MinimizeButton = self:_controlButton(Controls, "Minimize", Theme.Icons.Minimize, function()
 			self:SetMinimized(not self.Minimized)
 		end)
 
-		self.CloseButton = self:_controlButton(Controls, "✕", function()
+		self.CloseButton = self:_controlButton(Controls, "Close", Theme.Icons.Close, function()
 			if typeof(config.OnClose) == "function" then
 				local keepOpen = config.OnClose()
 				if keepOpen == true then
@@ -191,7 +191,6 @@ return function(UI)
 				self:Destroy()
 			end
 		end)
-		UI:BindTheme(self.CloseButton, "TextColor3", "TextDim")
 
 		------------------------------------------------------------------
 		-- Tab bar
@@ -297,15 +296,17 @@ return function(UI)
 	-- Internals
 	----------------------------------------------------------------------
 
-	function Window:_controlButton(parent, glyph, onClick)
+	--- Window chrome button. `icon` is an emoji (see Theme.Icons): Roblox's
+	-- UI font has no glyph for the plain text symbols these used to use, so
+	-- they came back as empty boxes. Emoji draw in colour and ignore
+	-- TextColor3, so the button background carries the state instead.
+	function Window:_controlButton(parent, name, icon, onClick)
 		local button = Create.Button({
-			Name = "Control" .. tostring(glyph),
+			Name = name,
 			Size = UDim2.new(0, 24, 0, 24),
 			BackgroundColor3 = Theme.Element,
-			TextColor3 = Theme.TextDim,
-			Text = glyph,
-			Font = Theme.FontBold,
-			TextSize = 14,
+			Text = icon,
+			TextSize = 12,
 			ZIndex = 4,
 			Parent = parent,
 		})
@@ -404,7 +405,7 @@ return function(UI)
 		end
 		self.Minimized = state
 
-		self.MinimizeButton.Text = state and "□" or "–"
+		self.MinimizeButton.Text = state and Theme.Icons.Restore or Theme.Icons.Minimize
 
 		if state then
 			Tween.Fast(self.Root, { Size = UDim2.new(0, self.Size.X, 0, Theme.TopbarHeight) }, function()

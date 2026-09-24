@@ -115,10 +115,8 @@ return function(UI)
 			Size = UDim2.new(0, 18, 1, 0),
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -10, 0, 0),
-			Text = "▾",
-			Font = Theme.Font,
-			TextSize = 12,
-			TextColor3 = Theme.TextDim,
+			Text = Theme.Icons.Down,
+			TextSize = 11,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			ZIndex = 3,
 			Parent = Header,
@@ -255,8 +253,8 @@ return function(UI)
 
 		local check = button:FindFirstChild("Check")
 		if check then
-			check.Text = selected and "✓" or ""
-			check.TextColor3 = selected and Theme.Accent or Theme.TextDim
+			-- Emoji, so no TextColor3 tint: hidden outright when unselected.
+			check.Text = selected and Theme.Icons.Check or ""
 		end
 	end
 
@@ -295,9 +293,7 @@ return function(UI)
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -4, 0, 0),
 			Text = "",
-			Font = Theme.FontBold,
 			TextSize = 12,
-			TextColor3 = Theme.TextDim,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			ZIndex = 4,
 			Parent = button,
@@ -489,7 +485,7 @@ return function(UI)
 
 	function Dropdown:SetOpen(open)
 		self.Open = open and true or false
-		self.Chevron.Text = self.Open and "▴" or "▾"
+		self.Chevron.Text = self.Open and Theme.Icons.Up or Theme.Icons.Down
 		self.RefreshList(true)
 	end
 

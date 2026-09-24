@@ -18,6 +18,7 @@
 return function(UI)
 	local Theme = UI.Theme
 	local Create = UI.Util.Create
+	local Color = UI.Util.Color
 	local Tween = UI.Util.Tween
 	local Layout = UI.Util.Layout
 	local Env = UI.Env
@@ -26,11 +27,56 @@ return function(UI)
 	Notification.__index = Notification
 
 	local TYPES = {
-		Info = { Color = "Info", Glyph = "i" },
-		Success = { Color = "Success", Glyph = "✓" },
-		Warning = { Color = "Warning", Glyph = "!" },
-		Error = { Color = "Error", Glyph = "✕" },
+		Info = { Color = "Info", Icon = "Info" },
+		Success = { Color = "Success", Icon = "Success" },
+		Warning = { Color = "Warning", Icon = "Warning" },
+		Error = { Color = "Error", Icon = "Error" },
 	}
+
+	-- Card geometry, in pixels.
+	--
+	-- Every size below is an offset. Nothing inside the card is sized with
+	-- a scale: AutomaticSize measures its children to pick the card's
+	-- height, so a child sized as a fraction of that height makes the two
+	-- depend on each other and Roblox resolves the loop unpredictably --
+	-- the status bar and the progress bar end up the wrong length and in
+	-- the wrong place. Measuring the text ourselves keeps it deterministic.
+	local METRICS = {
+		Inset     = 12, -- left/right inset of the content column
+		TopInset  = 11, -- card top -> content block
+		Accent    = 3, -- status bar width
+		AccentGap = 9, -- status bar -> icon badge
+		Badge     = 22, -- tinted square behind the emoji
+		BadgeGap  = 8, -- icon badge -> text column
+		TitleGap  = 3, -- title -> content
+		BarGap    = 9, -- content block -> progress bar
+		BarHeight = 2,
+		BottomPad = 8, -- progress bar -> card bottom
+	}
+
+	local TextService = Env.Service("TextService")
+
+	--- Height of `text` in pixels once wrapped to `width`, measured the way
+	-- Roblox lays it out. Falls back to a character estimate when
+	-- TextService is unavailable, which some executors cause.
+	local function measure(text, textSize, font, width)
+		if type(text) ~= "string" or text == "" then
+			return 0
+		end
+
+		if TextService then
+			local ok, bounds = pcall(function()
+				return TextService:GetTextSize(text, textSize, font, Vector2.new(width, 4096))
+			end)
+			if ok and bounds then
+				return bounds.Y
+			end
+		end
+
+		local perLine = math.max(1, math.floor(width / (textSize * 0.5)))
+		local lines = math.ceil(#text / perLine)
+		return lines * (textSize + 4)
+	end
 
 	local CORNERS = {
 		BottomRight = {
@@ -118,57 +164,85 @@ return function(UI)
 		------------------------------------------------------------------
 		-- Frame
 		------------------------------------------------------------------
+		-- Pixel width of the card. The container is a fixed-width column and
+		-- the card fills it, so resolve it once here: text has to be measured
+		-- against a real pixel width, and every child is then sized in
+		-- offsets rather than as a fraction of a height we are still working
+		-- out.
+		local width = container.AbsoluteSize.X
+		if not width or width <= 0 then
+			width = Theme.NotificationWidth
+		end
+
+		local badgeX = METRICS.Inset + METRICS.Accent + METRICS.AccentGap
+		local textX = badgeX + METRICS.Badge + METRICS.BadgeGap
+		local textWidth = math.max(40, width - textX - METRICS.Inset)
+		local titleSize = Theme.TextSize
+		local contentSize = Theme.SmallTextSize + 1
+
 		local Frame = Create("Frame", {
 			Name = "Notification",
 			BackgroundColor3 = Theme.Popup,
 			BorderSizePixel = 0,
-			AutomaticSize = Enum.AutomaticSize.Y,
+			AutomaticSize = Enum.AutomaticSize.None,
 			Size = UDim2.new(1, 0, 0, 0),
 			BackgroundTransparency = 1,
 			ZIndex = 101,
 			Parent = container,
 		})
 		Create.Corner(Theme.CornerRadius, Frame)
-		-- Bottom padding keeps the wrapped text clear of the progress bar.
-		Create.Padding(0, 0, 0, 12, Frame)
 		local stroke = Create.Stroke(Theme.Stroke, 1, Frame, 1)
 
-		-- Left accent bar.
+		-- Status bar down the left edge. Spanning exactly the text block
+		-- rather than "the card minus a margin" is what makes it line up
+		-- with what it is labelling.
 		local AccentBar = Create("Frame", {
 			Name = "Accent",
 			BackgroundColor3 = accent,
 			BorderSizePixel = 0,
-			Size = UDim2.new(0, 3, 1, -12),
-			Position = UDim2.new(0, 5, 0, 6),
+			Size = UDim2.new(0, METRICS.Accent, 0, 0),
+			Position = UDim2.new(0, METRICS.Inset, 0, METRICS.TopInset),
 			ZIndex = 102,
 			Parent = Frame,
 		})
-		Create.Corner(2, AccentBar)
+		Create.Corner(math.max(1, math.floor(METRICS.Accent / 2)), AccentBar)
+		UI:BindTheme(AccentBar, "BackgroundColor3", typeInfo.Color)
 
-		-- Glyph badge.
-		local Glyph = Create.Label({
-			Name = "Glyph",
-			BackgroundTransparency = 1,
-			Size = UDim2.new(0, 18, 0, 18),
-			Position = UDim2.new(0, 16, 0, 12),
-			Text = typeInfo.Glyph,
-			Font = Theme.FontBold,
-			TextSize = 12,
-			TextColor3 = accent,
-			TextXAlignment = Enum.TextXAlignment.Center,
+		-- Tinted badge behind the emoji. Emoji are drawn in colour and
+		-- ignore TextColor3, so the status colour has to come from the
+		-- backdrop rather than from the glyph itself.
+		local Badge = Create("Frame", {
+			Name = "Badge",
+			BackgroundColor3 = Color.Mix(Theme.Popup, accent, 0.24),
+			BorderSizePixel = 0,
+			Size = UDim2.new(0, METRICS.Badge, 0, METRICS.Badge),
+			Position = UDim2.new(0, METRICS.Inset + METRICS.Accent + METRICS.AccentGap, 0, METRICS.TopInset),
 			ZIndex = 102,
 			Parent = Frame,
+		})
+		Create.Corner(math.floor(METRICS.Badge * 0.3), Badge)
+
+		Create.Label({
+			Name = "Icon",
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 1, 0),
+			Text = Theme.Icons[typeInfo.Icon] or Theme.Icons.Info,
+			TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextYAlignment = Enum.TextYAlignment.Center,
+			ZIndex = 103,
+			Parent = Badge,
 		})
 
 		local Title = Create.Label({
 			Name = "Title",
 			BackgroundTransparency = 1,
-			AutomaticSize = Enum.AutomaticSize.Y,
-			Size = UDim2.new(1, -56, 0, 16),
-			Position = UDim2.new(0, 40, 0, 10),
+			AutomaticSize = Enum.AutomaticSize.None,
+			Size = UDim2.new(0, textWidth, 0, 0),
+			Position = UDim2.new(0, textX, 0, METRICS.TopInset),
 			Text = options.Title or "Notification",
 			Font = Theme.FontSemibold,
-			TextSize = Theme.TextSize,
+			TextSize = titleSize,
 			TextColor3 = Theme.Text,
 			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -179,12 +253,12 @@ return function(UI)
 		local Content = Create.Label({
 			Name = "Content",
 			BackgroundTransparency = 1,
-			AutomaticSize = Enum.AutomaticSize.Y,
-			Size = UDim2.new(1, -56, 0, 0),
-			Position = UDim2.new(0, 40, 0, 30),
+			AutomaticSize = Enum.AutomaticSize.None,
+			Size = UDim2.new(0, textWidth, 0, 0),
+			Position = UDim2.new(0, textX, 0, METRICS.TopInset),
 			Text = options.Content or options.Text or "",
 			Font = Theme.Font,
-			TextSize = Theme.SmallTextSize + 1,
+			TextSize = contentSize,
 			TextColor3 = Theme.TextDim,
 			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -192,25 +266,14 @@ return function(UI)
 			Parent = Frame,
 		})
 
-		-- Keep the content label glued under the (variable height) title.
-		-- The frame itself is sized by AutomaticSize, so only the offset
-		-- between the two labels needs maintaining here.
-		local function reflow()
-			Title.Size = UDim2.new(1, -56, 0, 0)
-			Content.Position = UDim2.new(0, 40, 0, 10 + Title.AbsoluteSize.Y + 2)
-		end
-
-		self.Bin:Add(Title:GetPropertyChangedSignal("AbsoluteSize"):Connect(reflow))
-		self.Bin:Add(Content:GetPropertyChangedSignal("AbsoluteSize"):Connect(reflow))
-		reflow()
-
-		-- Progress bar that drains over the notification's lifetime.
+		-- Progress bar that drains over the notification's lifetime. Inset to
+		-- the same margin as the status bar so the two read as one frame.
 		local ProgressTrack = Create("Frame", {
 			Name = "ProgressTrack",
 			BackgroundColor3 = Theme.StrokeSoft,
 			BorderSizePixel = 0,
-			Size = UDim2.new(1, -20, 0, 2),
-			Position = UDim2.new(0, 10, 1, -6),
+			Size = UDim2.new(0, width - METRICS.Inset * 2, 0, METRICS.BarHeight),
+			Position = UDim2.new(0, METRICS.Inset, 0, 0),
 			ZIndex = 102,
 			Parent = Frame,
 		})
@@ -225,6 +288,54 @@ return function(UI)
 			Parent = ProgressTrack,
 		})
 		Create.Corner(1, ProgressBar)
+		UI:BindTheme(ProgressBar, "BackgroundColor3", typeInfo.Color)
+
+		-- Lay the card out from measured text. The title's first line is
+		-- centred on the badge, so a title that wraps to two lines still
+		-- sits correctly next to it.
+		local function layout()
+			local titleHeight = measure(Title.Text, titleSize, Theme.FontSemibold, textWidth)
+			local contentHeight = measure(Content.Text, contentSize, Theme.Font, textWidth)
+			local hasContent = contentHeight > 0
+
+			local blockHeight = titleHeight
+			if hasContent then
+				blockHeight = blockHeight + METRICS.TitleGap + contentHeight
+			end
+
+			-- The title sits on the top inset and the badge is centred on the
+			-- title's first line, which can lift it a pixel or two above the
+			-- text. Whatever ends up highest is where the block starts.
+			local titleY = METRICS.TopInset
+			local lineHeight = titleSize + 3
+			local badgeY = math.max(4, titleY + math.floor((lineHeight - METRICS.Badge) / 2))
+			local blockTop = math.min(titleY, badgeY)
+			local blockBottom = math.max(
+				METRICS.TopInset + blockHeight,
+				badgeY + METRICS.Badge
+			)
+
+			Title.Size = UDim2.new(0, textWidth, 0, titleHeight)
+			Title.Position = UDim2.new(0, textX, 0, titleY)
+
+			Badge.Position = UDim2.new(0, badgeX, 0, badgeY)
+
+			Content.Visible = hasContent
+			Content.Size = UDim2.new(0, textWidth, 0, contentHeight)
+			Content.Position = UDim2.new(0, textX, 0, titleY + titleHeight + METRICS.TitleGap)
+
+			-- The bar brackets the block: level with the badge at the top,
+			-- flush with the last line of text at the bottom.
+			AccentBar.Position = UDim2.new(0, METRICS.Inset, 0, blockTop)
+			AccentBar.Size = UDim2.new(0, METRICS.Accent, 0, blockBottom - blockTop)
+
+			local height = blockBottom + METRICS.BarGap + METRICS.BarHeight + METRICS.BottomPad
+			Frame.Size = UDim2.new(1, 0, 0, height)
+			ProgressTrack.Position = UDim2.new(0, METRICS.Inset, 0, height - METRICS.BottomPad - METRICS.BarHeight)
+		end
+
+		self._Layout = layout
+		layout()
 
 		self.Frame = Frame
 		self.Title = Title
@@ -295,10 +406,12 @@ return function(UI)
 
 	function Notification:SetTitle(text)
 		self.Title.Text = tostring(text or "")
+		self:_Layout()
 	end
 
 	function Notification:SetContent(text)
 		self.Content.Text = tostring(text or "")
+		self:_Layout()
 	end
 
 	function Notification:Destroy()

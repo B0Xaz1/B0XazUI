@@ -90,10 +90,8 @@ return function(UI)
 			Size = UDim2.new(0, 24, 1, 0),
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -8, 0, 0),
-			Text = self.Expanded and "▾" or "▸",
-			Font = Theme.Font,
-			TextSize = 12,
-			TextColor3 = Theme.TextDim,
+			Text = self.Expanded and Theme.Icons.Expand or Theme.Icons.Collapse,
+			TextSize = 11,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			ZIndex = 3,
 			Parent = Header,
@@ -187,8 +185,7 @@ return function(UI)
 	function Section:SetExpanded(expanded)
 		self.Expanded = expanded and true or false
 		self.Body.Visible = self.Expanded
-		self.Chevron.Text = self.Expanded and "▾" or "▸"
-		Tween.Fast(self.Chevron, { TextColor3 = self.Expanded and Theme.Text or Theme.TextDim })
+		self.Chevron.Text = self.Expanded and Theme.Icons.Expand or Theme.Icons.Collapse
 	end
 
 	function Section:SetTitle(title)

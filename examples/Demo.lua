@@ -44,7 +44,7 @@ local Home = Window:AddTab("Home")
 local welcome = Home:AddSection("Welcome")
 
 welcome:AddLabel({
-	Text = "A UI engine built out of Instances at runtime — no Studio, no "
+	Text = "A UI engine built out of Instances at runtime - no Studio, no "
 		.. "place file, no pre-made ScreenGui. Everything below was created "
 		.. "by this script.",
 	Style = "Dim",
