@@ -831,8 +831,43 @@ function InstanceMethods:WaitForChild(name, timeout)
 	error(string.format("Infinite yield possible on WaitForChild(%q)", tostring(name)), 2)
 end
 
+-- Real IsA walks the class hierarchy; matching only on the exact class name
+-- makes IsA("GuiObject") silently false and lets assertions that guard on
+-- it pass without ever running.
+local CLASS_ANCESTRY = {
+	Frame          = { "GuiObject", "GuiBase2d" },
+	TextLabel      = { "GuiObject", "GuiBase2d" },
+	TextButton     = { "GuiObject", "GuiBase2d" },
+	TextBox        = { "GuiObject", "GuiBase2d" },
+	ImageLabel     = { "GuiObject", "GuiBase2d" },
+	ImageButton    = { "GuiObject", "GuiBase2d" },
+	ScrollingFrame = { "GuiObject", "GuiBase2d" },
+	ScreenGui      = { "LayerCollector", "GuiBase2d" },
+	UIListLayout   = { "UILayout", "UIComponent" },
+	UIGridLayout   = { "UILayout", "UIComponent" },
+	UICorner       = { "UIComponent" },
+	UIStroke       = { "UIComponent" },
+	UIPadding      = { "UIComponent" },
+	UIGradient     = { "UIComponent" },
+	UIScale        = { "UIComponent" },
+	UISizeConstraint = { "UIComponent" },
+}
+
 function InstanceMethods:IsA(className)
-	return self.__ClassName == className
+	if self.__ClassName == className then
+		return true
+	end
+
+	local ancestors = CLASS_ANCESTRY[self.__ClassName]
+	if ancestors then
+		for i = 1, #ancestors do
+			if ancestors[i] == className then
+				return true
+			end
+		end
+	end
+
+	return className == "Instance"
 end
 
 function InstanceMethods:IsDescendantOf(ancestor)
@@ -970,12 +1005,31 @@ end
 
 local TextService = newLoose("Service")
 TextService.Name = "TextService"
+-- Approximates TextService:GetTextSize closely enough to exercise layout
+-- code: a fixed advance per character, wrapped against the given bounds.
 TextService.GetTextSize = function(_, text, size, font, bounds)
-	local w = #tostring(text) * (size or 12) * 0.55
-	if bounds and bounds.X and bounds.X < math.huge then
-		w = math.min(w, bounds.X)
+	text = tostring(text)
+	size = size or 12
+
+	local charWidth = size * 0.55
+	local lineHeight = size + 4
+	local maxWidth = bounds and bounds.X or math.huge
+
+	if text == "" then
+		return Vector2.new(0, 0)
 	end
-	return Vector2.new(w, (size or 12) + 4)
+
+	if maxWidth == math.huge or maxWidth <= 0 then
+		return Vector2.new(#text * charWidth, lineHeight)
+	end
+
+	local perLine = math.max(1, math.floor(maxWidth / charWidth))
+	local lines = 0
+	for paragraph in (text .. "\n"):gmatch("([^\n]*)\n") do
+		lines = lines + math.max(1, math.ceil(#paragraph / perLine))
+	end
+
+	return Vector2.new(math.min(#text * charWidth, maxWidth), lines * lineHeight)
 end
 
 local HttpService = newLoose("Service")

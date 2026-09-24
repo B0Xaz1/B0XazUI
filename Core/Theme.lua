@@ -30,6 +30,43 @@ return function(UI)
 		FontMono = Enum.Font.Code,
 
 		------------------------------------------------------------------
+		-- Icons
+		------------------------------------------------------------------
+		-- Roblox draws its UI in the Gotham family, which has no glyph for
+		-- most of the symbol blocks (dingbats, geometric shapes, box
+		-- drawing). Those codepoints come back as an empty box, so every
+		-- icon the engine draws is an emoji instead: emoji fall back to
+		-- the platform emoji font and render on desktop and mobile alike.
+		--
+		-- Note that emoji are drawn in colour, so TextColor3 does NOT tint
+		-- them. Where a status colour has to read, put the emoji on a
+		-- tinted backdrop instead of relying on the text colour.
+		--
+		-- Swap any of these via UI:SetTheme({ Icons = { ... } }).
+		Icons = {
+			-- Notification types
+			Info     = "ℹ️", -- U+2139 U+FE0F
+			Success  = "✅", -- U+2705
+			Warning  = "⚠️", -- U+26A0 U+FE0F
+			Error    = "❌", -- U+274C
+
+			-- Window controls
+			Minimize = "➖", -- U+2796
+			Maximize = "⬜", -- U+2B1C
+			Restore  = "🔲", -- U+1F532
+			Close    = "✖️", -- U+2716 U+FE0F
+
+			-- Disclosure / direction
+			Expand   = "🔽", -- U+1F53D
+			Collapse = "▶️", -- U+25B6 U+FE0F
+			Up       = "🔼", -- U+1F53C
+			Down     = "🔽", -- U+1F53D
+
+			-- Selection
+			Check    = "✔️", -- U+2714 U+FE0F
+		},
+
+		------------------------------------------------------------------
 		-- Surfaces
 		------------------------------------------------------------------
 		Background = Color3.fromRGB(18, 18, 24),

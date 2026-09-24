@@ -211,6 +211,28 @@ step, so the same build runs everywhere:
 No external assets: corners are `UICorner`, strokes are `UIStroke`, and the colour
 picker's gradients are `UIGradient`s. Nothing to download, nothing to break.
 
+### Icons
+
+Every icon the engine draws lives in `Theme.Icons` and is an **emoji**:
+
+```lua
+UI:SetTheme({ Icons = { Success = "\u{2705}", Close = "\u{2716}\u{FE0F}" } })
+```
+
+Roblox renders its UI in the Gotham family, which has no glyph for most of the
+symbol blocks — dingbats (`\u{2713}` `\u{2715}`), geometric shapes (`\u{25BE}`
+`\u{25B8}`) and box drawing all come back as an empty box. Emoji fall back to the
+platform emoji font and render on desktop and mobile alike, so that is what the
+engine uses.
+
+The trade-off is that emoji are drawn **in colour**, so `TextColor3` does not tint
+them. Where a status colour still has to read — a notification type, say — the emoji
+sits on a tinted backdrop instead of relying on the glyph's own colour.
+
+`tests/spec.lua` walks the live instance tree and fails the build if any rendered
+string contains a non-ASCII character that did not come out of `Theme.Icons`, so a
+new text glyph cannot sneak back in.
+
 ---
 
 ## Tests
@@ -227,11 +249,11 @@ cd .. && node tests/run.js
 Two phases run, each in a fresh Lua VM:
 
 1. **`examples/Demo.lua`** — proves the documented API works end to end.
-2. **`tests/spec.lua`** — 58 assertions over loading, the window shell, every element's
-   input handling, notifications, theming, tree integrity and teardown.
+2. **`tests/spec.lua`** — 67 assertions over loading, the window shell, every element's
+   input handling, notification layout, icons, theming, tree integrity and teardown.
 
 ```
-58 passed, 0 failed
+67 passed, 0 failed
 ```
 
 ---

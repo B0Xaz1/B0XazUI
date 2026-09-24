@@ -651,6 +651,249 @@ describe("notifications", function()
 		eq(container.AnchorPoint.Y, 0, "anchored top")
 		UI:SetNotificationCorner("BottomRight")
 	end)
+
+	------------------------------------------------------------------
+	-- Card geometry. These are the assertions that catch the two ways a
+	-- toast card drifts apart: a child sized as a fraction of a height
+	-- the card is itself measuring, and decorations inset to a different
+	-- margin than the content they label.
+	------------------------------------------------------------------
+
+	local function find(parent, name)
+		for _, child in ipairs(parent:GetChildren()) do
+			if child.Name == name then
+				return child
+			end
+		end
+		return nil
+	end
+
+	local function bottomOf(instance)
+		return instance.Position.Y.Offset + instance.AbsoluteSize.Y
+	end
+
+	local function card(title, content)
+		local notification = UI:Notify({
+			Title = title,
+			Content = content,
+			Duration = 0,
+			Type = "Success",
+		})
+		return notification, notification.Frame
+	end
+
+	it("sizes itself to the measured text instead of guessing", function()
+		local _, frame = card("Short", "Short")
+		local tall = select(2, card("Short", string.rep("a much longer body ", 8)))
+
+		expect(frame.AbsoluteSize.Y > 0, "card has a height")
+		expect(
+			tall.AbsoluteSize.Y > frame.AbsoluteSize.Y,
+			"wrapped body makes the card taller"
+		)
+
+		-- Nothing left over from the AutomaticSize layout.
+		eq(frame.AutomaticSize, Enum.AutomaticSize.None, "card height is explicit")
+
+		frame:Destroy()
+		tall:Destroy()
+	end)
+
+	it("keeps the decorations in offsets, never as a fraction of the card", function()
+		local _, frame = card("Title", "Body")
+
+		-- The trap this guards: a child sized as a fraction of the card's
+		-- height makes the two depend on each other and Roblox resolves the
+		-- loop unpredictably. HitArea is the deliberate exception -- it is a
+		-- passive overlay that the card sizes, not the other way round.
+		local sized = { "Accent", "Badge", "Title", "Content", "ProgressTrack" }
+		local checked = 0
+
+		for _, name in ipairs(sized) do
+			local child = find(frame, name)
+			expect(child ~= nil, name .. " exists")
+			expect(child.Size.Y.Scale == 0, name .. " is sized with a Y scale")
+			checked = checked + 1
+		end
+
+		eq(checked, #sized, "every decoration was actually checked")
+
+		frame:Destroy()
+	end)
+
+	it("lines the status bar up with the text it labels", function()
+		local _, frame = card("A title that is deliberately long enough to wrap", "Body")
+
+		local accent = find(frame, "Accent")
+		local badge = find(frame, "Badge")
+		local content = find(frame, "Content")
+
+		expect(accent and badge and content, "card parts present")
+		-- Top of the icon block, bottom of the text block: the bar brackets
+		-- the whole thing the icon and the text are describing.
+		eq(accent.Position.Y.Offset, badge.Position.Y.Offset, "bar starts at the icon block")
+		eq(bottomOf(accent), bottomOf(content), "bar ends at the text block")
+		eq(accent.Position.X.Offset, 12, "bar sits on the card margin")
+
+		frame:Destroy()
+	end)
+
+	it("insets the progress bar to the same margin as the status bar", function()
+		local _, frame = card("Title", "Body")
+
+		local accent = find(frame, "Accent")
+		local track = find(frame, "ProgressTrack")
+		local content = find(frame, "Content")
+
+		eq(track.Position.X.Offset, accent.Position.X.Offset, "shared left margin")
+		expect(
+			track.Position.Y.Offset > bottomOf(content),
+			"progress bar clears the text"
+		)
+		expect(
+			track.Position.Y.Offset + track.AbsoluteSize.Y < frame.AbsoluteSize.Y,
+			"progress bar is inside the card"
+		)
+
+		-- Right margin mirrors the left one.
+		eq(
+			track.Position.X.Offset + track.AbsoluteSize.X,
+			frame.AbsoluteSize.X - accent.Position.X.Offset,
+			"right margin mirrors the left"
+		)
+
+		frame:Destroy()
+	end)
+
+	it("re-lays out when its text changes", function()
+		local notification, frame = card("Title", "Body")
+		local before = frame.AbsoluteSize.Y
+
+		notification:SetContent(string.rep("a much longer body ", 8))
+
+		expect(frame.AbsoluteSize.Y > before, "card grew with the text")
+
+		local content = find(frame, "Content")
+		local track = find(frame, "ProgressTrack")
+		expect(track.Position.Y.Offset > bottomOf(content), "progress bar still clears the text")
+
+		notification:Destroy()
+	end)
+
+	it("hides the body label when there is no body", function()
+		local notification, frame = card("Title only", "")
+		expect(find(frame, "Content").Visible == false, "body hidden")
+		notification:Destroy()
+	end)
+end)
+
+----------------------------------------------------------------------
+-- 5b. Icons -- Roblox's UI font has no glyph for the symbol blocks
+-- these used to be written in, so every icon has to come from one table.
+----------------------------------------------------------------------
+
+describe("icons", function()
+	--- Walks UTF-8 the long way round; no dependency on the utf8 library.
+	local function codepoints(text)
+		local out = {}
+		local i = 1
+		while i <= #text do
+			local byte = string.byte(text, i)
+			local length = 1
+			if byte >= 240 then
+				length = 4
+			elseif byte >= 224 then
+				length = 3
+			elseif byte >= 192 then
+				length = 2
+			end
+
+			local value = byte
+			if length == 2 then
+				value = byte - 192
+			elseif length == 3 then
+				value = byte - 224
+			elseif length == 4 then
+				value = byte - 240
+			end
+			for offset = 2, length do
+				value = value * 64 + (string.byte(text, i + offset - 1) or 0) - 128
+			end
+
+			table.insert(out, value)
+			i = i + length
+		end
+		return out
+	end
+
+	local function collectText(instance, out, prefix)
+		prefix = prefix and (prefix .. "." .. instance.Name) or instance.Name
+		for _, child in ipairs(instance:GetChildren()) do
+			if child.ClassName == "TextLabel" or child.ClassName == "TextButton" then
+				out[prefix .. "." .. child.Name] = child.Text
+			end
+			collectText(child, out, prefix)
+		end
+		return out
+	end
+
+	it("publishes every icon through the theme", function()
+		local icons = UI.Theme.Icons
+		expect(type(icons) == "table", "Theme.Icons exists")
+
+		for _, key in ipairs({
+			"Info", "Success", "Warning", "Error",
+			"Minimize", "Maximize", "Restore", "Close",
+			"Expand", "Collapse", "Up", "Down", "Check",
+		}) do
+			local value = icons[key]
+			expect(type(value) == "string" and #value > 0, "Icons." .. key .. " is set")
+			expect(#codepoints(value) > 0, "Icons." .. key .. " is not empty")
+		end
+	end)
+
+	it("draws no glyph outside the icon table", function()
+		local allowed = {}
+		for _, value in pairs(UI.Theme.Icons) do
+			allowed[value] = true
+		end
+
+		expect(UI.ScreenGui ~= nil, "a ScreenGui is up")
+
+		local offenders = {}
+		for path, text in pairs(collectText(UI.ScreenGui, {})) do
+			for _, code in ipairs(codepoints(text)) do
+				if code > 127 and not allowed[text] then
+					table.insert(offenders, string.format("%s -> U+%04X", path, code))
+				end
+			end
+		end
+
+		eq(#offenders, 0, table.concat(offenders, ", ") .. " is not an emoji")
+	end)
+
+	it("tints a status icon with its backdrop, not its text colour", function()
+		local notification = UI:Notify({
+			Title = "Tinted",
+			Duration = 0,
+			Type = "Error",
+		})
+
+		local badge
+		for _, child in ipairs(notification.Frame:GetChildren()) do
+			if child.Name == "Badge" then
+				badge = child
+			end
+		end
+
+		expect(badge ~= nil, "badge exists")
+		expect(
+			badge.BackgroundColor3 ~= UI.Theme.Popup,
+			"badge carries the status colour"
+		)
+
+		notification:Destroy()
+	end)
 end)
 
 ----------------------------------------------------------------------
